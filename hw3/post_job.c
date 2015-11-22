@@ -4,17 +4,271 @@
 #include <errno.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <openssl/md5.h>
+#include <string.h>
+#include "submitjob.h"
 
 #ifndef __NR_submitjob
 #error submitjob system call not defined
 #endif
 
-int main(int argc, const char *argv[])
-{
-	int rc;
-	void *dummy = (void *) argv[1];
 
-  	rc = syscall(__NR_submitjob, dummy);
+// int validate_and_copy_params(submit_job *job, int argc, char **argv)
+// {
+// 	char opt, *algo, *password;
+// 	int passlen = 0;
+// 	int i = 0;
+// 	int type = 0, t_found = 0, a_found = 0, p_found = 0;
+// 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
+// 	jcipher jcipher_work;
+
+// 	opt = getopt(argc, argv, "t:a:p:h");
+// 	while (opt != -1) {
+// 		switch (opt) {
+// 		case 't':
+// 			if (t_found) {
+// 				fprintf(stderr, "Type of command can be specified only "
+// 				        "once\n");
+// 			}
+// 			t_found = 1;
+// 			type = *optarg - '0';
+// 			break;
+// 		case 'a':
+// 			if (a_found) {
+// 				fprintf(stderr, "Algorithm to be used can be specified only "
+// 				        "once\n");
+// 			}
+// 			a_found = 1;
+// 			algo = optarg;
+// 			break;
+// 		case 'p':
+// 			if (p_found) {
+// 				fprintf(stderr, "Passphrase can be specified only once\n");
+// 			}
+// 			p_found = 1;
+
+// 			password = optarg + '\0';
+// 			passlen = strlen(password);
+// 			if (passlen < 6) {
+// 				fprintf(stderr, "The password must be at least 6 characters "
+// 				        "long. The entered password is only %d characters.\n"
+// 				        "For details use -h flag.", passlen);
+// 				return -1;
+// 			}
+// 			// optarg[MD5_DIGEST_LENGTH] = '\0';
+// 			MD5((unsigned char*) password, passlen, pass_hash);
+// 			// pass_hash[MD5_DIGEST_LENGTH] = '\0';
+// 				/*
+// 				 * MD5 returns integer representation of the hash.
+// 				 * We need to turn it into a hex representation so that it can 
+// 				 * be passed around.
+// 				 */
+// 				// printf("converting\n");
+// 				// printf("strlen(pass_hash) = %d\n", sizeof(pass_hash));
+// 				// printf("strlen(keybuf) = %d\n", sizeof(&jcipher_work->keybuf));
+// 				for(i = 0; i < 16; i++) {
+// 					sprintf(&jcipher_work.keybuf[i*2], "%02x", (unsigned int)pass_hash[i]);
+// 				}
+// 				// printf("converted\n");
+// 				jcipher_work.keybuf[32] = '\0'; // Terminating with a null.
+// 				// printf("Terminated\n");
+// 				// jcipher_work->keylen = strlen(jcipher_work->keybuf);
+// 				// printf("keylen\n");
+// 			break;
+// 		case 'h':
+// 			printf("./post_job: UNIMPLEMENTED.\n");
+// 			return 0;
+// 		default:
+// 			printf("./post_job: Try './post_job -h' for more information.\n");
+// 			return -1;
+// 		}
+// 		opt = getopt(argc, argv, "t:a:p:h");
+// 	}
+
+// 	if (type == 1 || type ==2) {
+// 		if (type == 1 && p_found == 0){
+// 			fprintf(stderr, "Password is a must for encryption/decryption.\n"
+// 							"Try './post_job -h' for more information.\n");
+// 			return -1;
+// 		}
+
+// 		if (optind + 2 != argc) {
+// 			fprintf(stderr, "%d = Insufficient number of arguments.\n", optind);
+// 			fprintf(stderr, "%s\t%s\t%s\t%s\n", argv[optind], argv[optind + 1], argv[optind+2], argv[optind+3]);
+// 			return -1;
+// 		}
+
+// 		jcipher_work.infile = argv[optind] + '\0';
+// 		jcipher_work.outfile = argv[optind + 1] + '\0';
+// 		// printf("pass = %s\n", pass_hash);
+// 		// jcipher_work->keybuf = pass_hash;
+// 		// jcipher_work->cipher_type = malloc(sizeof(unsigned char *));
+// 		jcipher_work.cipher = algo + '\0';
+// 		jcipher_work.keylen = 32;
+// 		jcipher_work.flags = type - 1;
+
+// 		job->type = type;
+// 		job->work = &jcipher_work;
+
+// 		// printf("%s\n", (char *)jcipher_work.cipher_type);
+// 		// printf("%p\n", &jcipher_work);
+// 		// printf("%p\n", &jcipher_work.cipher_type);
+// 		// printf("%p\n", &job->work);
+
+// 		if(strlen(jcipher_work.infile) > MAX_FILE_NAME_LENGTH ||
+// 			strlen(jcipher_work.outfile) > MAX_FILE_NAME_LENGTH) {
+// 			fprintf(stderr, "The maximum size of filename allowed is 255 "
+// 				"characters One of your file name exceeds the allowed "
+// 				"limit.\n");
+// 			return -1;
+// 		}
+// 	}
+
+// 	return 0;
+// }
+
+
+// int main(int argc, char *argv[])
+// {
+// 	int rc;
+
+// 	submit_job job;
+// 	// jcipher work;
+// 	rc = validate_and_copy_params(&job, argc, argv);
+// 	void *dummy = (void *) argv[1];
+
+// 	// printf("0. algo = %s\n", work.cipher);
+// 	// printf("0. pass = %s\n", work.keybuf);
+// 	// printf("0. in = %s\n", work.infile);
+// 	// printf("0. out = %s\n", work.outfile);
+// 	// printf("0. keylen = %d\n", work.keylen);
+// 	// printf("0. flags = %d\n", work.flags);
+
+// 	printf("0. Type = %d\n", job.type);
+// 	// printf("0. algo = %s\n", (char *) ((jcipher *)job.work)->cipher);
+// 	// printf("0. keybuf = %s\n", (char *) ((jcipher *)job.work)->keybuf);
+// 	// printf("0. infile = %s\n", (char *) ((jcipher *)job.work)->infile);
+// 	// printf("0. outfile = %s\n", (char *) ((jcipher *)job.work)->outfile);
+// 	// printf("0. keylen = %d\n", ((jcipher *)job.work)->keylen);
+// 	// printf("0. flags = %d\n", ((jcipher *)job.work)->flags);
+
+// 	printf("0. algo = %s\n", job.work->cipher);
+// 	printf("0. keybuf = %s\n", job.work->keybuf);
+// 	printf("0. infile = %s\n", job.work->infile);
+// 	printf("0. outfile = %s\n", job.work->outfile);
+// 	printf("0. keylen = %d\n", job.work->keylen);
+// 	printf("0. flags = %d\n", job.work->flags);
+
+
+// 	rc = syscall(__NR_submitjob, dummy);
+// 	if (rc == 0)
+// 		printf("syscall returned %d\n", rc);
+// 	else
+// 		printf("syscall returned %d (errno=%d)\n", rc, errno);
+
+// 	exit(rc);
+// }
+
+
+
+
+int main(int argc, char *argv[])
+{
+	int rc = 0;
+	submit_job job;
+	char opt, *algo, *password;
+	int passlen = 0;
+	int type = 0, t_found = 0, a_found = 0, p_found = 0;
+	unsigned char pass_hash[MD5_DIGEST_LENGTH];
+	jcipher jcipher_work;
+
+	opt = getopt(argc, argv, "t:a:p:h");
+	while (opt != -1) {
+		switch (opt) {
+		case 't':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+				        "once\n");
+			}
+			t_found = 1;
+			type = *optarg - '0';
+			break;
+		case 'a':
+			if (a_found) {
+				fprintf(stderr, "Algorithm to be used can be specified only "
+				        "once\n");
+			}
+			a_found = 1;
+			algo = optarg;
+			break;
+		case 'p':
+			if (p_found) {
+				fprintf(stderr, "Passphrase can be specified only once\n");
+			}
+			p_found = 1;
+
+			password = optarg + '\0';
+			passlen = strlen(password);
+			if (passlen < 6) {
+				fprintf(stderr, "The password must be at least 6 characters "
+				        "long. The entered password is only %d characters.\n"
+				        "For details use -h flag.", passlen);
+				return -1;
+			}
+			MD5((unsigned char*) password, passlen, pass_hash);
+			break;
+		case 'h':
+			printf("./post_job: UNIMPLEMENTED.\n");
+			return 0;
+		default:
+			printf("./post_job: Try './post_job -h' for more information.\n");
+			return -1;
+		}
+		opt = getopt(argc, argv, "t:a:p:h");
+	}
+
+	// add type check validation
+	if (type == 1 || type ==2) {
+		if (type == 1 && p_found == 0){
+			fprintf(stderr, "Password is a must for encryption/decryption.\n"
+							"Try './post_job -h' for more information.\n");
+			return -1;
+		}
+
+		if (optind + 2 != argc) {
+			fprintf(stderr, "%d = Insufficient number of arguments.\n", optind);
+			fprintf(stderr, "%s\t%s\t%s\t%s\n", argv[optind], argv[optind + 1], argv[optind+2], argv[optind+3]);
+			return -1;
+		}
+
+		jcipher_work.infile = argv[optind] + '\0';
+		jcipher_work.outfile = argv[optind + 1] + '\0';
+		jcipher_work.cipher = algo + '\0';
+		jcipher_work.keybuf = pass_hash;
+		jcipher_work.keylen = 32;
+		jcipher_work.flags = type - 1;
+
+		job.type = type;
+		job.work = &jcipher_work;
+
+		if(strlen(jcipher_work.infile) > MAX_FILE_NAME_LENGTH ||
+			strlen(jcipher_work.outfile) > MAX_FILE_NAME_LENGTH) {
+			fprintf(stderr, "The maximum size of filename allowed is 255 "
+				"characters One of your file name exceeds the allowed "
+				"limit.\n");
+			return -1;
+		}
+	}
+
+	// printf("0. Type = %d\n", job.type);
+	// printf("0. algo = %s\n", ((jcipher *)job.work)->cipher);
+	// printf("0. keybuf = %s\n", ((jcipher *)job.work)->keybuf);
+	// printf("0. infile = %s\n", ((jcipher *)job.work)->infile);
+	// printf("0. outfile = %s\n", ((jcipher *)job.work)->outfile);
+	// printf("0. keylen = %d\n", ((jcipher *)job.work)->keylen);
+	// printf("0. flags = %d\n", ((jcipher *)job.work)->flags);
+
+	rc = syscall(__NR_submitjob, (void *) &job);
 	if (rc == 0)
 		printf("syscall returned %d\n", rc);
 	else
