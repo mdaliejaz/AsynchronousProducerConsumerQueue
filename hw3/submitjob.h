@@ -19,5 +19,5 @@ typedef struct encrypt_decrypt_struct {
 	char *cipher;			// cipher type to be used
 	unsigned char *keybuf;		// encryption/decryption passphrase
 	int keylen;				// length of the passphrase
-	int flags;					// encryption or decryption: encryption = 1
+	int flag;					// encryption or decryption: encryption = 1
 } jcipher;

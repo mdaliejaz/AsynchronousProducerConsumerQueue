@@ -191,7 +191,15 @@ int main(int argc, char *argv[])
 				        "once\n");
 			}
 			t_found = 1;
-			type = *optarg - '0';
+			if(!strcmp(optarg,"ENCRYPT")) {
+				type = ENCRYPT;
+			}
+			else if(!strcmp(optarg,"DECRYPT")) {
+				type = DECRYPT;
+			}
+			else {
+				type = *optarg - '0';
+			}
 			break;
 		case 'a':
 			if (a_found) {
@@ -228,16 +236,16 @@ int main(int argc, char *argv[])
 	}
 
 	// add type check validation
-	if (type == 1 || type ==2) {
-		if (type == 1 && p_found == 0){
+	if (type == ENCRYPT || type == DECRYPT) {
+		if (p_found == 0){
 			fprintf(stderr, "Password is a must for encryption/decryption.\n"
 							"Try './post_job -h' for more information.\n");
 			return -1;
 		}
 
 		if (optind + 2 != argc) {
-			fprintf(stderr, "%d = Insufficient number of arguments.\n", optind);
-			fprintf(stderr, "%s\t%s\t%s\t%s\n", argv[optind], argv[optind + 1], argv[optind+2], argv[optind+3]);
+			fprintf(stderr, "%d = Insufficient number of arguments.\n",
+				optind);
 			return -1;
 		}
 
@@ -245,8 +253,8 @@ int main(int argc, char *argv[])
 		jcipher_work.outfile = argv[optind + 1] + '\0';
 		jcipher_work.cipher = algo + '\0';
 		jcipher_work.keybuf = pass_hash;
-		jcipher_work.keylen = 32;
-		jcipher_work.flags = type - 1;
+		jcipher_work.keylen = MD5_DIGEST_LENGTH;
+		jcipher_work.flag = type - 1;
 
 		job.type = type;
 		job.work = &jcipher_work;
