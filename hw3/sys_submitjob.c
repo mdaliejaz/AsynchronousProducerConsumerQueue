@@ -58,7 +58,7 @@ long validate_user_jcipher_args(jcipher *user_param) {
 		return -EINVAL;
 	}
 
-	if(!(user_param->flag == 0 || user_param->flag == 1)) {
+	if(!(user_param->flag == 1 || user_param->flag == 2)) {
 		pr_err("user parameters are not valid!\n");
 		return -EINVAL;
 	}
@@ -153,16 +153,14 @@ long copy_jcipher_data_to_kernel(jcipher *user_param, jcipher *kernel_param)
 		return rc;
 }
 
-void submit_work_func( struct work_struct *work ) {
+void submit_work_func(struct work_struct *work) {
 	int rc = 0;
-	my_work_t *in_work = (my_work_t *)work;
+	qwork *in_work = (qwork *)work;
 
 	switch(in_work->type) {
 	case ENCRYPT:
-		rc = encrypt();
-		break;
 	case DECRYPT:
-		rc = decrypt();
+		rc = jcrypt((jcipher *)in_work->task);
 		break;
 	case COMPRESS:
 		rc = compress();
@@ -182,18 +180,18 @@ asmlinkage long submitjob(void *arg)
 	long rc = 0;
 	submit_job *job;
 	jcipher *jcipher_work;
-	my_work_t *in_work;
+	qwork *in_work;
 
 	rc = validate_user_args((submit_job *) arg);
 
 	if (rc) {
-		goto k_sys_args_fail;
+		goto out;
 	}
 
 	job = kzalloc(sizeof(submit_job), GFP_KERNEL);
 	if (!job) {
 		rc = -ENOMEM;
-		goto k_sys_args_fail;
+		goto out;
 	}
 
 	rc = copy_from_user(&job->type, &((submit_job *)arg)->type, sizeof(int));
@@ -229,18 +227,21 @@ asmlinkage long submitjob(void *arg)
 	printk("job->work->keylen = %d\n", ((jcipher *)job->work)->keylen);
 	printk("job->work->flag = %d\n", ((jcipher *)job->work)->flag);
 
-	in_work =  (my_work_t *)kzalloc(sizeof(my_work_t), GFP_KERNEL);
+	in_work =  (qwork *)kzalloc(sizeof(qwork), GFP_KERNEL);
 	if (in_work) {
 		INIT_WORK((struct work_struct *)in_work, submit_work_func);
 		in_work->type = job->type;
+		in_work->task = job->work;
 		queue_work(job_wq, (struct work_struct *)in_work);
 	}
+
+	goto out;
 
 	free_jcipher:
 		kfree(jcipher_work);
 	free_job:
 		kfree(job);
-	k_sys_args_fail:
+	out:
 		return rc;
 }
 

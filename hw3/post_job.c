@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
 		jcipher_work.cipher = algo + '\0';
 		jcipher_work.keybuf = pass_hash;
 		jcipher_work.keylen = MD5_DIGEST_LENGTH;
-		jcipher_work.flag = type - 1;
+		jcipher_work.flag = type;
 
 		job.type = type;
 		job.work = &jcipher_work;
