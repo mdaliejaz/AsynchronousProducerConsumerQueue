@@ -1,4 +1,5 @@
-obj-m += sys_submitjob.o
+obj-m += mod_submitjob.o
+mod_submitjob-y := sys_submitjob.o jcrypto.o jcompress.o
 
 INC=/lib/modules/$(shell uname -r)/build/arch/x86/include
 

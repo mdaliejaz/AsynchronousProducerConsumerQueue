@@ -2,7 +2,8 @@
 #include <linux/moduleloader.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
-#include "submitjob.h"
+#include <linux/workqueue.h>
+#include "jobs.h"
 
 asmlinkage extern long (*sysptr)(void *arg);
 
@@ -152,11 +153,36 @@ long copy_jcipher_data_to_kernel(jcipher *user_param, jcipher *kernel_param)
 		return rc;
 }
 
+void submit_work_func( struct work_struct *work ) {
+	int rc = 0;
+	my_work_t *in_work = (my_work_t *)work;
+
+	switch(in_work->type) {
+	case ENCRYPT:
+		rc = encrypt();
+		break;
+	case DECRYPT:
+		rc = decrypt();
+		break;
+	case COMPRESS:
+		rc = compress();
+		break;
+	default:
+		printk("Do something \n");
+	}
+
+	kfree((void *)work);
+	return;
+}
+
+static struct workqueue_struct *job_wq = NULL;
+
 asmlinkage long submitjob(void *arg)
 {
 	long rc = 0;
 	submit_job *job;
 	jcipher *jcipher_work;
+	my_work_t *in_work;
 
 	rc = validate_user_args((submit_job *) arg);
 
@@ -203,6 +229,13 @@ asmlinkage long submitjob(void *arg)
 	printk("job->work->keylen = %d\n", ((jcipher *)job->work)->keylen);
 	printk("job->work->flag = %d\n", ((jcipher *)job->work)->flag);
 
+	in_work =  (my_work_t *)kzalloc(sizeof(my_work_t), GFP_KERNEL);
+	if (in_work) {
+		INIT_WORK((struct work_struct *)in_work, submit_work_func);
+		in_work->type = job->type;
+		queue_work(job_wq, (struct work_struct *)in_work);
+	}
+
 	free_jcipher:
 		kfree(jcipher_work);
 	free_job:
@@ -216,12 +249,16 @@ static int __init init_sys_submitjob(void)
 	printk("installed new sys_submitjob module\n");
 	if (sysptr == NULL)
 		sysptr = submitjob;
+	if (!job_wq)
+		job_wq = create_workqueue("jobs_queue");
 	return 0;
 }
 static void  __exit exit_sys_submitjob(void)
 {
 	if (sysptr != NULL)
 		sysptr = NULL;
+	if (job_wq)
+		destroy_workqueue(job_wq);
 	printk("removed sys_submitjob module\n");
 }
 module_init(init_sys_submitjob);
