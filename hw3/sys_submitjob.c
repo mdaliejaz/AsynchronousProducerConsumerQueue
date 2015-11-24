@@ -6,7 +6,8 @@
 #include "jobs.h"
 
 asmlinkage extern long (*sysptr)(void *arg);
-
+static struct workqueue_struct *job_wq = NULL;
+atomic_t queue_counter;
 
 long validate_user_args(submit_job *user_param) {
 	if (user_param == NULL || IS_ERR(user_param) ||
@@ -168,12 +169,11 @@ void submit_work_func(struct work_struct *work) {
 	default:
 		printk("Do something \n");
 	}
-
+	atomic_dec(&queue_counter);
+	printk("picked = %d\n", atomic_read(&queue_counter));
 	kfree((void *)work);
 	return;
 }
-
-static struct workqueue_struct *job_wq = NULL;
 
 asmlinkage long submitjob(void *arg)
 {
@@ -182,8 +182,12 @@ asmlinkage long submitjob(void *arg)
 	jcipher *jcipher_work;
 	qwork *in_work;
 
-	rc = validate_user_args((submit_job *) arg);
+	if(atomic_read(&queue_counter) == 5) {
+		printk("workqueue is full!\n");
+		goto out;
+	}
 
+	rc = validate_user_args((submit_job *) arg);
 	if (rc) {
 		goto out;
 	}
@@ -232,6 +236,8 @@ asmlinkage long submitjob(void *arg)
 		INIT_WORK((struct work_struct *)in_work, submit_work_func);
 		in_work->type = job->type;
 		in_work->task = job->work;
+		atomic_inc(&queue_counter);
+		printk("posted = %d\n", atomic_read(&queue_counter));
 		queue_work(job_wq, (struct work_struct *)in_work);
 	}
 
@@ -252,6 +258,7 @@ static int __init init_sys_submitjob(void)
 		sysptr = submitjob;
 	if (!job_wq)
 		job_wq = create_workqueue("jobs_queue");
+		atomic_set(&queue_counter, 0);
 	return 0;
 }
 static void  __exit exit_sys_submitjob(void)
@@ -260,6 +267,7 @@ static void  __exit exit_sys_submitjob(void)
 		sysptr = NULL;
 	if (job_wq)
 		destroy_workqueue(job_wq);
+		atomic_set(&queue_counter, 0);
 	printk("removed sys_submitjob module\n");
 }
 module_init(init_sys_submitjob);

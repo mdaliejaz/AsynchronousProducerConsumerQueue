@@ -3,6 +3,7 @@
 #include <linux/fs.h>
 #include <crypto/hash.h>
 #include <linux/uaccess.h>
+#include <linux/delay.h>
 #include <asm/string.h>
 #include <linux/slab.h>
 #include <linux/crypto.h>
@@ -44,8 +45,7 @@ int getMD5Hash(char *str, u8 *md5_hash)
 		goto symlink_hash_err;
 	}
 
-	rc = crypto_shash_update(sdescmd5,(const char *) str,
-		strlen(str));
+	rc = crypto_shash_update(sdescmd5,(const char *) str, strlen(str));
 	if (rc){
 		goto symlink_hash_err;
 	}
@@ -215,15 +215,17 @@ int do_decryption(const char *algo, const void *key, int key_len,
 
 int jcrypt(jcipher *jcipher_obj)
 {
-	int rc = 0, to_pad, bytes, len = PAGE_SIZE, encrypt_pad_len = 32;
-	int decrypt_pad_len = 32;
+	int rc = 0, out_exist = 0, to_pad, bytes, len = PAGE_SIZE;
+	int decrypt_pad_len = 32, encrypt_pad_len = 32;
 	char *read_buffer, *key_buffer, *write_buffer, *pad_buffer, pad_size[3];
 	char cipher_algo[16], preamble_hash_key[48], *decrypt_key_buffer;
-	char *tmpfilp_name = "/usr/src/hw3-mejaz/hw3/jcryptoaa6b5d17e373744f14c07f71b22f9549.tmp";
+	char *tmpfilp_name = "jcryptoaa6b5d17e373744f14c07f71b22f9549.tmp";
 	struct file *infilp, *outfilp, *tmpfilp;
 	struct inode *outfilp_inode = NULL, *tmpfilp_inode = NULL;
 	struct dentry *outfilp_dentry = NULL, *tmpfilp_dentry = NULL;
+	struct inode *del_inode;
 	size_t infile_size;
+	struct kstat stat;
 	u8 *md5_hash = NULL;
 	umode_t infile_mode;
 	mm_segment_t oldfs;
@@ -233,6 +235,9 @@ int jcrypt(jcipher *jcipher_obj)
 	jcipher_obj->keybuf[16] = 0;
     sprintf(preamble_hash_key, "%s-%s", jcipher_obj->keybuf,
     	jcipher_obj->cipher);
+
+    printk("Remove me!\n");
+    msleep(10000);	// remove me
 
 	md5_hash = kzalloc(AES_BLOCK_SIZE, GFP_KERNEL);
 	if (!md5_hash) {
@@ -295,6 +300,7 @@ int jcrypt(jcipher *jcipher_obj)
 	tmpfilp_inode = tmpfilp->f_path.dentry->d_parent->d_inode;
 	tmpfilp_dentry = tmpfilp->f_path.dentry;
 
+	out_exist = vfs_stat(jcipher_obj->outfile, &stat);
     outfilp = filp_open(jcipher_obj->outfile, O_WRONLY|O_CREAT, infile_mode);
 	rc = validate_file(outfilp, 0);
 	if(rc) {
@@ -410,9 +416,10 @@ int jcrypt(jcipher *jcipher_obj)
 		}
 		break;
 	default:
-		printk("error!\n");
+		printk("Unknown Flag!\n");
 		goto reset_fs;
 	}
+
 	rc = vfs_rename(tmpfilp->f_path.dentry->d_parent->d_inode,
 		tmpfilp->f_path.dentry, outfilp->f_path.dentry->d_parent->d_inode,
 		outfilp->f_path.dentry, NULL, 0);
@@ -420,16 +427,26 @@ int jcrypt(jcipher *jcipher_obj)
 	reset_fs:
 		set_fs(oldfs);
 	close_outfilp:
-		if (outfilp && !IS_ERR(outfilp))
-			filp_close(outfilp, NULL);
-	close_tmpfilp:
-		if(rc) {
-			if(tmpfilp_dentry != NULL && tmpfilp_inode != NULL) {
-				vfs_unlink(tmpfilp_inode, tmpfilp_dentry, NULL);
-			}
+		if(out_exist && rc < 0) {
+			vfs_unlink(outfilp->f_path.dentry->d_parent->d_inode,
+				outfilp->f_path.dentry, &del_inode);
+			outfilp = NULL;
 		}
-		if (tmpfilp && !IS_ERR(tmpfilp))
+		if (outfilp != NULL && !IS_ERR(outfilp)) {
+			filp_close(outfilp, NULL);
+		}
+	close_tmpfilp:
+		if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
+			if(tmpfilp->f_path.dentry != NULL &&
+				tmpfilp->f_path.dentry->d_parent->d_inode != NULL) {
+				vfs_unlink(tmpfilp->f_path.dentry->d_parent->d_inode,
+					tmpfilp->f_path.dentry, &del_inode);
+			}
+			tmpfilp = NULL;
+		}
+		if (tmpfilp != NULL && !IS_ERR(tmpfilp)) {
 			filp_close(tmpfilp, NULL);
+		}
 	close_infilp:
 		if (infilp && !IS_ERR(infilp))
 			filp_close(infilp, NULL);

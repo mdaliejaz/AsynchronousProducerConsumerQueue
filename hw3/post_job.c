@@ -1,6 +1,7 @@
 #include <asm/unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <errno.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -176,7 +177,8 @@ int main(int argc, char *argv[])
 {
 	int rc = 0;
 	submit_job job;
-	char opt, *algo, *password;
+	char opt, *algo, *password, *res;
+	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
 	int passlen = 0;
 	int type = 0, t_found = 0, a_found = 0, p_found = 0;
 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
@@ -224,6 +226,7 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 			MD5((unsigned char*) password, passlen, pass_hash);
+			pass_hash[passlen] = '\0';
 			break;
 		case 'h':
 			printf("./post_job: UNIMPLEMENTED.\n");
@@ -249,10 +252,21 @@ int main(int argc, char *argv[])
 			return -1;
 		}
 
-		jcipher_work.infile = argv[optind] + '\0';
-		jcipher_work.outfile = argv[optind + 1] + '\0';
+		res = realpath(argv[optind], in_realpath);
+		if (res) {
+			jcipher_work.infile =  in_realpath + '\0';
+		}
+		else {
+			perror("realpath");
+			return -1;
+		}
+
+		res = realpath(argv[optind + 1], out_realpath);
+		// No error check as the file might not exist
+		jcipher_work.outfile =  out_realpath + '\0';
+
 		jcipher_work.cipher = algo + '\0';
-		jcipher_work.keybuf = pass_hash;
+		jcipher_work.keybuf = pass_hash + '\0';
 		jcipher_work.keylen = MD5_DIGEST_LENGTH;
 		jcipher_work.flag = type;
 
