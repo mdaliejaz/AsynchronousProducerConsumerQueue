@@ -22,4 +22,4 @@ typedef struct encrypt_decrypt_struct {
 	unsigned char *keybuf;		// encryption/decryption passphrase
 	int keylen;					// length of the passphrase
 	int flag;					// encryption or decryption: encryption = 1
-} jcipher;
+} xcrypt;

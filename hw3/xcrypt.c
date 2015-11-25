@@ -213,7 +213,7 @@ int do_decryption(const char *algo, const void *key, int key_len,
     return 0;
 }
 
-int jcrypt(jcipher *jcipher_obj)
+int do_xcrypt(xcrypt *xcrypt_obj)
 {
 	int rc = 0, out_exist = 0, to_pad, bytes, len = PAGE_SIZE;
 	int decrypt_pad_len = 32, encrypt_pad_len = 32;
@@ -230,14 +230,14 @@ int jcrypt(jcipher *jcipher_obj)
 	umode_t infile_mode;
 	mm_segment_t oldfs;
 
-	sprintf(cipher_algo, "cbc(%s)", jcipher_obj->cipher);
+	sprintf(cipher_algo, "cbc(%s)", xcrypt_obj->cipher);
 	pr_debug("cipher_algo passed = %s\n", cipher_algo);
-	jcipher_obj->keybuf[16] = 0;
-    sprintf(preamble_hash_key, "%s-%s", jcipher_obj->keybuf,
-    	jcipher_obj->cipher);
+	xcrypt_obj->keybuf[16] = 0;
+    sprintf(preamble_hash_key, "%s-%s", xcrypt_obj->keybuf,
+    	xcrypt_obj->cipher);
 
     printk("Remove me!\n");
-    msleep(10000);	// remove me
+    // msleep(10000);	// remove me
 
 	md5_hash = kzalloc(AES_BLOCK_SIZE, GFP_KERNEL);
 	if (!md5_hash) {
@@ -256,7 +256,7 @@ int jcrypt(jcipher *jcipher_obj)
 		rc = -ENOMEM;
 		goto free_md5_hash;
 	}
-	key_buffer = (char *)kzalloc(jcipher_obj->keylen, GFP_KERNEL);
+	key_buffer = (char *)kzalloc(xcrypt_obj->keylen, GFP_KERNEL);
 	if (!key_buffer) {
 		rc = -ENOMEM;
 		goto free_read_buffer;
@@ -278,7 +278,7 @@ int jcrypt(jcipher *jcipher_obj)
 	}
 
 	// open all the files to read or write as required
-	infilp = filp_open(jcipher_obj->infile, O_RDONLY, 0);
+	infilp = filp_open(xcrypt_obj->infile, O_RDONLY, 0);
 	rc = validate_file(infilp, 1);
 	if(rc) {
 		goto close_infilp;
@@ -300,8 +300,8 @@ int jcrypt(jcipher *jcipher_obj)
 	tmpfilp_inode = tmpfilp->f_path.dentry->d_parent->d_inode;
 	tmpfilp_dentry = tmpfilp->f_path.dentry;
 
-	out_exist = vfs_stat(jcipher_obj->outfile, &stat);
-    outfilp = filp_open(jcipher_obj->outfile, O_WRONLY|O_CREAT, infile_mode);
+	out_exist = vfs_stat(xcrypt_obj->outfile, &stat);
+    outfilp = filp_open(xcrypt_obj->outfile, O_WRONLY|O_CREAT, infile_mode);
 	rc = validate_file(outfilp, 0);
 	if(rc) {
 		goto close_outfilp;
@@ -331,7 +331,7 @@ int jcrypt(jcipher *jcipher_obj)
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
 
-	switch(jcipher_obj->flag) {
+	switch(xcrypt_obj->flag) {
 	case ENCRYPT:
 		// Copy the padding info in buffer to be written in output file
 		if(to_pad<10)
@@ -343,7 +343,7 @@ int jcrypt(jcipher *jcipher_obj)
 
 		tmpfilp->f_op->write(tmpfilp, md5_hash, AES_BLOCK_SIZE, &tmpfilp->f_pos);
 
-		rc = do_encryption(cipher_algo, jcipher_obj->keybuf, AES_BLOCK_SIZE,
+		rc = do_encryption(cipher_algo, xcrypt_obj->keybuf, AES_BLOCK_SIZE,
 			write_buffer, &encrypt_pad_len, pad_buffer, 2 * AES_BLOCK_SIZE);
 		if (rc) {
 			printk("Failed while encrypting the padding info.\n");
@@ -356,12 +356,12 @@ int jcrypt(jcipher *jcipher_obj)
 			&infilp->f_pos)) > 0) {
 			if(bytes < PAGE_SIZE) {
 				len = bytes + to_pad;
-				rc = do_encryption(cipher_algo, jcipher_obj->keybuf, AES_BLOCK_SIZE,
+				rc = do_encryption(cipher_algo, xcrypt_obj->keybuf, AES_BLOCK_SIZE,
 					write_buffer, &len, read_buffer, bytes + to_pad);
 				tmpfilp->f_op->write(tmpfilp, write_buffer, bytes + to_pad,
 					&tmpfilp->f_pos);
 			} else {
-				rc = do_encryption(cipher_algo, jcipher_obj->keybuf, AES_BLOCK_SIZE,
+				rc = do_encryption(cipher_algo, xcrypt_obj->keybuf, AES_BLOCK_SIZE,
 					write_buffer, &len, read_buffer, PAGE_SIZE);
 				tmpfilp->f_op->write(tmpfilp, write_buffer, PAGE_SIZE,
 					&tmpfilp->f_pos);
@@ -382,7 +382,7 @@ int jcrypt(jcipher *jcipher_obj)
 
 	    infilp->f_op->read(infilp, decrypt_key_buffer, 2 * AES_BLOCK_SIZE,
 	    	&infilp->f_pos);
-	    rc = do_decryption(cipher_algo, jcipher_obj->keybuf, AES_BLOCK_SIZE,
+	    rc = do_decryption(cipher_algo, xcrypt_obj->keybuf, AES_BLOCK_SIZE,
 	    	pad_buffer, &decrypt_pad_len, decrypt_key_buffer,
 	    	2 * AES_BLOCK_SIZE);
 	    if (rc) {
@@ -398,13 +398,13 @@ int jcrypt(jcipher *jcipher_obj)
 			&infilp->f_pos)) > 0) {
 			if(bytes < PAGE_SIZE) {
 				len = bytes;
-				rc = do_decryption(cipher_algo, jcipher_obj->keybuf,
+				rc = do_decryption(cipher_algo, xcrypt_obj->keybuf,
 					AES_BLOCK_SIZE, write_buffer, &len, read_buffer, bytes);
 				len = bytes - to_pad;
 				tmpfilp->f_op->write(tmpfilp, write_buffer, len,
 					&tmpfilp->f_pos);
 			} else {
-				rc = do_decryption(cipher_algo, jcipher_obj->keybuf,
+				rc = do_decryption(cipher_algo, xcrypt_obj->keybuf,
 					AES_BLOCK_SIZE, write_buffer, &len, read_buffer, PAGE_SIZE);
 				tmpfilp->f_op->write(tmpfilp, write_buffer, PAGE_SIZE,
 					&tmpfilp->f_pos);

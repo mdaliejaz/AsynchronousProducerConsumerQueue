@@ -6,8 +6,8 @@
 #include "jobs.h"
 
 asmlinkage extern long (*sysptr)(void *arg);
-static struct workqueue_struct *job_wq = NULL;
-atomic_t queue_counter;
+static struct workqueue_struct *work_queue = NULL;
+atomic_t queue_size;
 atomic_t unique_id;
 static LIST_HEAD(head);
 
@@ -26,7 +26,7 @@ long validate_user_args(submit_job *user_param) {
 	return 0;
 }
 
-long validate_user_jcipher_args(jcipher *user_param) {
+long validate_user_xcrypt_args(xcrypt *user_param) {
 	if(user_param == NULL || IS_ERR(user_param) ||
 		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
 		pr_err("user parameters are not valid!\n");
@@ -74,7 +74,7 @@ long validate_user_jcipher_args(jcipher *user_param) {
 	return 0;
 }
 
-long copy_jcipher_data_to_kernel(jcipher *user_param, jcipher *kernel_param)
+long copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
 {
 	long rc = 0;
 
@@ -165,25 +165,34 @@ void submit_work_func(struct work_struct *work) {
 	switch(in_work->type) {
 	case ENCRYPT:
 	case DECRYPT:
-		rc = jcrypt((jcipher *)in_work->task);
-		kfree(((jcipher *)in_work->task)->infile);
-		kfree(((jcipher *)in_work->task)->outfile);
-		kfree(((jcipher *)in_work->task)->keybuf);
-		kfree(((jcipher *)in_work->task)->cipher);
-		kfree((jcipher *)in_work->task);
+		rc = do_xcrypt((xcrypt *)in_work->task);
+		kfree(((xcrypt *)in_work->task)->infile);
+		kfree(((xcrypt *)in_work->task)->outfile);
+		kfree(((xcrypt *)in_work->task)->keybuf);
+		kfree(((xcrypt *)in_work->task)->cipher);
+		kfree((xcrypt *)in_work->task);
 		break;
 	case COMPRESS:
 		rc = compress();
 		break;
+	case DECOMPRESS:
+		rc = decompress();
+		break;
+	case CHECKSUM:
+		rc = checksum();
+		break;
+	case CONCAT:
+		rc = concat();
+		break;
 	default:
 		printk("Do something \n");
 	}
-	atomic_dec(&queue_counter);
+	atomic_dec(&queue_size);
 
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
-		if(node->job_id == in_work->id) {
-			printk("deleting job_id = %d\n", node->job_id);
+		if(node->id == in_work->id) {
+			printk("deleting id = %d\n", node->id);
 			list_del(pos);
 			kfree(node);
 		}
@@ -192,11 +201,11 @@ void submit_work_func(struct work_struct *work) {
 	printk("node list.\n");
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
-		printk("node->id = %d\n", node->job_id);
-		printk("node->type = %d\n", node->job_type);
+		printk("node->id = %d\n", node->id);
+		printk("node->type = %d\n", node->type);
 	}
 
-	printk("picked = %d\n", atomic_read(&queue_counter));
+	printk("picked = %d\n", atomic_read(&queue_size));
 	kfree((void *)work);
 	return;
 }
@@ -205,11 +214,11 @@ asmlinkage long submitjob(void *arg)
 {
 	long rc = 0;
 	submit_job *job;
-	jcipher *jcipher_work;
+	xcrypt *xcrypt_work = NULL;
 	qwork *in_work;
 	job_list *node = NULL;
 
-	if(atomic_read(&queue_counter) == 5) {
+	if(atomic_read(&queue_size) == 5) {
 		printk("workqueue is full!\n");
 		goto out;
 	}
@@ -233,17 +242,24 @@ asmlinkage long submitjob(void *arg)
 	switch(job->type) {
 	case ENCRYPT:
 	case DECRYPT:
-		rc = validate_user_jcipher_args((jcipher *)((submit_job *)arg)->work);
-		jcipher_work = kzalloc(sizeof(jcipher), GFP_KERNEL);
-		if (!jcipher_work) {
+		rc = validate_user_xcrypt_args((xcrypt *)((submit_job *)arg)->work);
+		xcrypt_work = kzalloc(sizeof(xcrypt), GFP_KERNEL);
+		if (!xcrypt_work) {
 			rc = -ENOMEM;
 			goto free_job;
 		}
-		rc = copy_jcipher_data_to_kernel((jcipher *)((submit_job *)arg)->work,
-			jcipher_work);
+		rc = copy_xcrypt_data_to_kernel((xcrypt *)((submit_job *)arg)->work,
+			xcrypt_work);
 		if(rc)
-			goto free_jcipher;
-		job->work = jcipher_work;
+			goto free_xcrypt;
+		job->work = xcrypt_work;
+		break;
+	case COMPRESS:
+	case DECOMPRESS:
+	case CHECKSUM:
+	case CONCAT:
+		job->work = NULL;
+		printk("IMPLEMENT ME!\n");
 		break;
 	default:
 		pr_err("error\n");
@@ -251,17 +267,17 @@ asmlinkage long submitjob(void *arg)
 	}
 
 	printk("job->type = %d\n", job->type);
-	printk("job->work->infile = %s\n", ((jcipher *)job->work)->infile);
-	printk("job->work->outfile = %s\n", ((jcipher *)job->work)->outfile);
-	printk("job->work->cipher = %s\n", ((jcipher *)job->work)->cipher);
-	printk("job->work->keybuf = %s\n", ((jcipher *)job->work)->keybuf);
-	printk("job->work->keylen = %d\n", ((jcipher *)job->work)->keylen);
-	printk("job->work->flag = %d\n", ((jcipher *)job->work)->flag);
+	printk("job->work->infile = %s\n", ((xcrypt *)job->work)->infile);
+	printk("job->work->outfile = %s\n", ((xcrypt *)job->work)->outfile);
+	printk("job->work->cipher = %s\n", ((xcrypt *)job->work)->cipher);
+	printk("job->work->keybuf = %s\n", ((xcrypt *)job->work)->keybuf);
+	printk("job->work->keylen = %d\n", ((xcrypt *)job->work)->keylen);
+	printk("job->work->flag = %d\n", ((xcrypt *)job->work)->flag);
 
 	node = (job_list *)kzalloc(sizeof(job_list), GFP_KERNEL);
 	if(!node) {
 		rc = -ENOMEM;
-		goto free_jcipher;
+		goto free_xcrypt;
 	}
 
 	in_work =  (qwork *)kzalloc(sizeof(qwork), GFP_KERNEL);
@@ -271,12 +287,12 @@ asmlinkage long submitjob(void *arg)
 		in_work->id = atomic_read(&unique_id);
 		in_work->type = job->type;
 		in_work->task = job->work;
-		node->job_id = in_work->id;
-		node->job_type = in_work->type;
+		node->id = in_work->id;
+		node->type = in_work->type;
 		node->queued_job = (struct work_struct *)in_work;
-		atomic_inc(&queue_counter);
-		printk("posted = %d\n", atomic_read(&queue_counter));
-		queue_work(job_wq, (struct work_struct *)in_work);
+		atomic_inc(&queue_size);
+		printk("posted = %d\n", atomic_read(&queue_size));
+		queue_work(work_queue, (struct work_struct *)in_work);
 		INIT_LIST_HEAD(&node->list);
 		list_add_tail(&node->list, &head);
 	} else {
@@ -287,8 +303,8 @@ asmlinkage long submitjob(void *arg)
 	goto out;
 	free_job_on_queue:
 		kfree(node);
-	free_jcipher:
-		kfree(jcipher_work);
+	free_xcrypt:
+		kfree(xcrypt_work);
 	free_job:
 		kfree(job);
 	out:
@@ -300,20 +316,20 @@ static int __init init_sys_submitjob(void)
 	printk("installed new sys_submitjob module\n");
 	if (sysptr == NULL)
 		sysptr = submitjob;
-	if (!job_wq)
-		job_wq = alloc_workqueue("jobs_queue", 0, 5);
-		atomic_set(&queue_counter, 0);
-		atomic_set(&unique_id, 0);
+	if (!work_queue)
+		work_queue = alloc_workqueue("jobs_queue", 0, 5);
+	atomic_set(&queue_size, 0);
+	atomic_set(&unique_id, 0);
 	return 0;
 }
 static void  __exit exit_sys_submitjob(void)
 {
 	if (sysptr != NULL)
 		sysptr = NULL;
-	if (job_wq)
-		destroy_workqueue(job_wq);
-		atomic_set(&queue_counter, 0);
-		atomic_set(&unique_id, 0);
+	if (work_queue)
+		destroy_workqueue(work_queue);
+	atomic_set(&queue_size, 0);
+	atomic_set(&unique_id, 0);
 	printk("removed sys_submitjob module\n");
 }
 module_init(init_sys_submitjob);

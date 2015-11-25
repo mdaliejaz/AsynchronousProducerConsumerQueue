@@ -21,7 +21,7 @@
 // 	int i = 0;
 // 	int type = 0, t_found = 0, a_found = 0, p_found = 0;
 // 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
-// 	jcipher jcipher_work;
+// 	xcrypt xcrypt_work;
 
 // 	opt = getopt(argc, argv, "t:a:p:h");
 // 	while (opt != -1) {
@@ -66,14 +66,14 @@
 // 				 */
 // 				// printf("converting\n");
 // 				// printf("strlen(pass_hash) = %d\n", sizeof(pass_hash));
-// 				// printf("strlen(keybuf) = %d\n", sizeof(&jcipher_work->keybuf));
+// 				// printf("strlen(keybuf) = %d\n", sizeof(&xcrypt_work->keybuf));
 // 				for(i = 0; i < 16; i++) {
-// 					sprintf(&jcipher_work.keybuf[i*2], "%02x", (unsigned int)pass_hash[i]);
+// 					sprintf(&xcrypt_work.keybuf[i*2], "%02x", (unsigned int)pass_hash[i]);
 // 				}
 // 				// printf("converted\n");
-// 				jcipher_work.keybuf[32] = '\0'; // Terminating with a null.
+// 				xcrypt_work.keybuf[32] = '\0'; // Terminating with a null.
 // 				// printf("Terminated\n");
-// 				// jcipher_work->keylen = strlen(jcipher_work->keybuf);
+// 				// xcrypt_work->keylen = strlen(xcrypt_work->keybuf);
 // 				// printf("keylen\n");
 // 			break;
 // 		case 'h':
@@ -99,25 +99,25 @@
 // 			return -1;
 // 		}
 
-// 		jcipher_work.infile = argv[optind] + '\0';
-// 		jcipher_work.outfile = argv[optind + 1] + '\0';
+// 		xcrypt_work.infile = argv[optind] + '\0';
+// 		xcrypt_work.outfile = argv[optind + 1] + '\0';
 // 		// printf("pass = %s\n", pass_hash);
-// 		// jcipher_work->keybuf = pass_hash;
-// 		// jcipher_work->cipher_type = malloc(sizeof(unsigned char *));
-// 		jcipher_work.cipher = algo + '\0';
-// 		jcipher_work.keylen = 32;
-// 		jcipher_work.flags = type - 1;
+// 		// xcrypt_work->keybuf = pass_hash;
+// 		// xcrypt_work->cipher_type = malloc(sizeof(unsigned char *));
+// 		xcrypt_work.cipher = algo + '\0';
+// 		xcrypt_work.keylen = 32;
+// 		xcrypt_work.flags = type - 1;
 
 // 		job->type = type;
-// 		job->work = &jcipher_work;
+// 		job->work = &xcrypt_work;
 
-// 		// printf("%s\n", (char *)jcipher_work.cipher_type);
-// 		// printf("%p\n", &jcipher_work);
-// 		// printf("%p\n", &jcipher_work.cipher_type);
+// 		// printf("%s\n", (char *)xcrypt_work.cipher_type);
+// 		// printf("%p\n", &xcrypt_work);
+// 		// printf("%p\n", &xcrypt_work.cipher_type);
 // 		// printf("%p\n", &job->work);
 
-// 		if(strlen(jcipher_work.infile) > MAX_FILE_NAME_LENGTH ||
-// 			strlen(jcipher_work.outfile) > MAX_FILE_NAME_LENGTH) {
+// 		if(strlen(xcrypt_work.infile) > MAX_FILE_NAME_LENGTH ||
+// 			strlen(xcrypt_work.outfile) > MAX_FILE_NAME_LENGTH) {
 // 			fprintf(stderr, "The maximum size of filename allowed is 255 "
 // 				"characters One of your file name exceeds the allowed "
 // 				"limit.\n");
@@ -134,7 +134,7 @@
 // 	int rc;
 
 // 	submit_job job;
-// 	// jcipher work;
+// 	// xcrypt work;
 // 	rc = validate_and_copy_params(&job, argc, argv);
 // 	void *dummy = (void *) argv[1];
 
@@ -146,12 +146,12 @@
 // 	// printf("0. flags = %d\n", work.flags);
 
 // 	printf("0. Type = %d\n", job.type);
-// 	// printf("0. algo = %s\n", (char *) ((jcipher *)job.work)->cipher);
-// 	// printf("0. keybuf = %s\n", (char *) ((jcipher *)job.work)->keybuf);
-// 	// printf("0. infile = %s\n", (char *) ((jcipher *)job.work)->infile);
-// 	// printf("0. outfile = %s\n", (char *) ((jcipher *)job.work)->outfile);
-// 	// printf("0. keylen = %d\n", ((jcipher *)job.work)->keylen);
-// 	// printf("0. flags = %d\n", ((jcipher *)job.work)->flags);
+// 	// printf("0. algo = %s\n", (char *) ((xcrypt *)job.work)->cipher);
+// 	// printf("0. keybuf = %s\n", (char *) ((xcrypt *)job.work)->keybuf);
+// 	// printf("0. infile = %s\n", (char *) ((xcrypt *)job.work)->infile);
+// 	// printf("0. outfile = %s\n", (char *) ((xcrypt *)job.work)->outfile);
+// 	// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
+// 	// printf("0. flags = %d\n", ((xcrypt *)job.work)->flags);
 
 // 	printf("0. algo = %s\n", job.work->cipher);
 // 	printf("0. keybuf = %s\n", job.work->keybuf);
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 	int passlen = 0;
 	int type = 0, t_found = 0, a_found = 0, p_found = 0;
 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
-	jcipher jcipher_work;
+	xcrypt xcrypt_work;
 
 	opt = getopt(argc, argv, "t:a:p:h");
 	while (opt != -1) {
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
 
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
-			jcipher_work.infile =  in_realpath + '\0';
+			xcrypt_work.infile =  in_realpath + '\0';
 		}
 		else {
 			perror("realpath");
@@ -263,18 +263,18 @@ int main(int argc, char *argv[])
 
 		res = realpath(argv[optind + 1], out_realpath);
 		// No error check as the file might not exist
-		jcipher_work.outfile =  out_realpath + '\0';
+		xcrypt_work.outfile =  out_realpath + '\0';
 
-		jcipher_work.cipher = algo + '\0';
-		jcipher_work.keybuf = pass_hash + '\0';
-		jcipher_work.keylen = MD5_DIGEST_LENGTH;
-		jcipher_work.flag = type;
+		xcrypt_work.cipher = algo + '\0';
+		xcrypt_work.keybuf = pass_hash + '\0';
+		xcrypt_work.keylen = MD5_DIGEST_LENGTH;
+		xcrypt_work.flag = type;
 
 		job.type = type;
-		job.work = &jcipher_work;
+		job.work = &xcrypt_work;
 
-		if(strlen(jcipher_work.infile) > MAX_FILE_NAME_LENGTH ||
-			strlen(jcipher_work.outfile) > MAX_FILE_NAME_LENGTH) {
+		if(strlen(xcrypt_work.infile) > MAX_FILE_NAME_LENGTH ||
+			strlen(xcrypt_work.outfile) > MAX_FILE_NAME_LENGTH) {
 			fprintf(stderr, "The maximum size of filename allowed is 255 "
 				"characters One of your file name exceeds the allowed "
 				"limit.\n");
@@ -283,12 +283,12 @@ int main(int argc, char *argv[])
 	}
 
 	// printf("0. Type = %d\n", job.type);
-	// printf("0. algo = %s\n", ((jcipher *)job.work)->cipher);
-	// printf("0. keybuf = %s\n", ((jcipher *)job.work)->keybuf);
-	// printf("0. infile = %s\n", ((jcipher *)job.work)->infile);
-	// printf("0. outfile = %s\n", ((jcipher *)job.work)->outfile);
-	// printf("0. keylen = %d\n", ((jcipher *)job.work)->keylen);
-	// printf("0. flags = %d\n", ((jcipher *)job.work)->flags);
+	// printf("0. algo = %s\n", ((xcrypt *)job.work)->cipher);
+	// printf("0. keybuf = %s\n", ((xcrypt *)job.work)->keybuf);
+	// printf("0. infile = %s\n", ((xcrypt *)job.work)->infile);
+	// printf("0. outfile = %s\n", ((xcrypt *)job.work)->outfile);
+	// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
+	// printf("0. flags = %d\n", ((xcrypt *)job.work)->flags);
 
 	rc = syscall(__NR_submitjob, (void *) &job);
 	if (rc == 0)
