@@ -301,7 +301,7 @@ static int __init init_sys_submitjob(void)
 	if (sysptr == NULL)
 		sysptr = submitjob;
 	if (!job_wq)
-		job_wq = create_workqueue("jobs_queue");
+		job_wq = alloc_workqueue("jobs_queue", 0, 5);
 		atomic_set(&queue_counter, 0);
 		atomic_set(&unique_id, 0);
 	return 0;
