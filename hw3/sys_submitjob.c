@@ -3,13 +3,19 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
+#include <net/sock.h>
+#include <linux/netlink.h>
+#include <linux/skbuff.h>
 #include "jobs.h"
+
+#define NETLINK_USER 31
 
 asmlinkage extern long (*sysptr)(void *arg);
 static struct workqueue_struct *work_queue = NULL;
 atomic_t queue_size;
 atomic_t unique_id;
 static LIST_HEAD(head);
+struct sock *nl_sk = NULL;
 
 long validate_user_args(submit_job *user_param) {
 	if (user_param == NULL || IS_ERR(user_param) ||
@@ -156,6 +162,65 @@ long copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
 		return rc;
 }
 
+// static void nl_recv_msg(struct sk_buff *skb)
+// {
+// 
+    // struct nlmsghdr *header;
+    // int pid;
+    // struct sk_buff *skb_out;
+    // int msg_size;
+    // char *msg = "Hello from kernel";
+    // int res;
+
+    // printk(KERN_INFO "Entering: %s\n", __FUNCTION__);
+
+    // msg_size = strlen(msg);
+
+    // header = (struct nlmsghdr *)skb->data;
+    // printk(KERN_INFO "Netlink received msg payload: %s\n",
+    // 	(char *)nlmsg_data(header));
+    // pid = header->nlmsg_pid; /*pid of sending process */
+
+    // skb_out = nlmsg_new(msg_size, 0);
+    // if (!skb_out) {
+    //     printk(KERN_ERR "Failed to allocate new skb\n");
+    //     return;
+    // }
+
+    // header = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
+    // NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
+    // strncpy(nlmsg_data(header), msg, msg_size);
+
+    // res = nlmsg_unicast(nl_sk, skb_out, pid);
+    // if (res < 0)
+    //     printk(KERN_INFO "Error while sending bak to user\n");
+// }
+
+static void nl_send_msg(int pid, char *msg)
+{
+    struct nlmsghdr *header;
+    struct sk_buff *skb_out;
+    int msg_size;
+    int rc = 0;
+
+    msg_size = strlen(msg);
+    // msg_size = sizeof(int);
+
+    skb_out = nlmsg_new(msg_size, 0);
+    if (!skb_out) {
+        printk(KERN_ERR "Failed to allocate new skb\n");
+        return;
+    }
+
+    header = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
+    NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
+    strncpy(nlmsg_data(header), msg, msg_size);
+
+    rc = nlmsg_unicast(nl_sk, skb_out, pid);
+    if (rc < 0)
+        printk(KERN_INFO "Error while sending bak to user\n");
+}
+
 void submit_work_func(struct work_struct *work) {
 	int rc = 0;
 	qwork *in_work = (qwork *)work;
@@ -198,6 +263,8 @@ void submit_work_func(struct work_struct *work) {
 		}
 	}
 
+	nl_send_msg(in_work->pid, "hello world");
+
 	printk("node list.\n");
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
@@ -233,8 +300,11 @@ asmlinkage long submitjob(void *arg)
 		rc = -ENOMEM;
 		goto out;
 	}
-
 	rc = copy_from_user(&job->type, &((submit_job *)arg)->type, sizeof(int));
+	if (rc) {
+		goto free_job;
+	}
+	rc = copy_from_user(&job->pid, &((submit_job *)arg)->pid, sizeof(int));
 	if (rc) {
 		goto free_job;
 	}
@@ -287,6 +357,7 @@ asmlinkage long submitjob(void *arg)
 		in_work->id = atomic_read(&unique_id);
 		in_work->type = job->type;
 		in_work->task = job->work;
+		in_work->pid = job->pid;
 		node->id = in_work->id;
 		node->type = in_work->type;
 		node->queued_job = (struct work_struct *)in_work;
@@ -313,6 +384,15 @@ asmlinkage long submitjob(void *arg)
 
 static int __init init_sys_submitjob(void)
 {
+	struct netlink_kernel_cfg cfg = {
+    	.input = NULL,
+	};
+	nl_sk = netlink_kernel_create(&init_net, NETLINK_USER, &cfg);
+    if (!nl_sk) {
+        printk(KERN_ALERT "Error creating socket.\n");
+        return -ESOCKTNOSUPPORT;
+    }
+
 	printk("installed new sys_submitjob module\n");
 	if (sysptr == NULL)
 		sysptr = submitjob;
@@ -320,6 +400,7 @@ static int __init init_sys_submitjob(void)
 		work_queue = alloc_workqueue("jobs_queue", 0, 5);
 	atomic_set(&queue_size, 0);
 	atomic_set(&unique_id, 0);
+
 	return 0;
 }
 static void  __exit exit_sys_submitjob(void)
@@ -330,6 +411,7 @@ static void  __exit exit_sys_submitjob(void)
 		destroy_workqueue(work_queue);
 	atomic_set(&queue_size, 0);
 	atomic_set(&unique_id, 0);
+	netlink_kernel_release(nl_sk);
 	printk("removed sys_submitjob module\n");
 }
 module_init(init_sys_submitjob);

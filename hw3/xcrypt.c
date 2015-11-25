@@ -237,7 +237,7 @@ int do_xcrypt(xcrypt *xcrypt_obj)
     	xcrypt_obj->cipher);
 
     printk("Remove me!\n");
-    // msleep(10000);	// remove me
+    msleep(10000);	// remove me
 
 	md5_hash = kzalloc(AES_BLOCK_SIZE, GFP_KERNEL);
 	if (!md5_hash) {

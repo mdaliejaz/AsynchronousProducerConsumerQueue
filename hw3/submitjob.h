@@ -10,6 +10,7 @@
 
 //struct to submit jobs on queue
 typedef struct submit_job {
+	int pid;
 	int type;
 	void *work;
 } submit_job;
@@ -23,3 +24,6 @@ typedef struct encrypt_decrypt_struct {
 	int keylen;					// length of the passphrase
 	int flag;					// encryption or decryption: encryption = 1
 } xcrypt;
+
+int nl_bind(int);
+void receive_from_kernel(int);

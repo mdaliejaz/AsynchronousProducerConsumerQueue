@@ -10,6 +10,7 @@ typedef struct queue_work {
 	struct work_struct worker;
 	int type;
 	int id;
+	int pid;
 	void *task;
 } qwork;
 

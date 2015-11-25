@@ -175,7 +175,7 @@
 
 int main(int argc, char *argv[])
 {
-	int rc = 0;
+	int rc = 0, pid;
 	submit_job job;
 	char opt, *algo, *password, *res;
 	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
@@ -290,11 +290,23 @@ int main(int argc, char *argv[])
 	// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
 	// printf("0. flags = %d\n", ((xcrypt *)job.work)->flags);
 
+	pid = getpid();
+	job.pid = pid;
+	rc = nl_bind(pid);
+	if(rc) {
+		goto out;
+	}
+
+	printf("pid = %d\n", pid);
+
 	rc = syscall(__NR_submitjob, (void *) &job);
 	if (rc == 0)
 		printf("syscall returned %d\n", rc);
 	else
 		printf("syscall returned %d (errno=%d)\n", rc, errno);
 
+	receive_from_kernel(pid);
+
+	out:
 	exit(rc);
 }
