@@ -3,7 +3,8 @@
 #include <linux/fs.h>
 #include "submitjob.h"
 
-int validate_file(struct file *f, int flag) {
+int validate_file(struct file *f, int flag)
+{
 	int rc = 0;
 	// check if valid file pointer
 	if (!f) {

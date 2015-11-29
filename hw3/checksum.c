@@ -2,10 +2,56 @@
 #include <linux/moduleloader.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 #include <crypto/hash.h>
 #include "jobs.h"
 
 static DEFINE_MUTEX(checksum_mutex);
+
+int validate_user_checksum_args(checksum *user_param)
+{
+	if(user_param == NULL || IS_ERR(user_param) ||
+		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EFAULT;
+	}
+
+	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->infile,
+			sizeof(user_param->infile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH)) {
+		return -ENAMETOOLONG;
+	}
+	return 0;
+}
+
+int copy_checksum_data_to_kernel(checksum *user_param, checksum *kernel_param)
+{
+	int rc = 0;
+
+	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
+	if (!kernel_param->infile) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	rc = copy_from_user(kernel_param->infile, user_param->infile,
+		strlen(user_param->infile));
+	if (rc) {
+		printk("Copying of input file failed.\n");
+		goto free_infile;
+	}
+
+	return 0;
+
+	free_infile:
+		kfree(kernel_param->infile);
+	out:
+		return rc;
+}
 
 int do_checksum(checksum *checksum_obj, char *checksum_result) {
 	int rc = 0, size, bytes, i;
