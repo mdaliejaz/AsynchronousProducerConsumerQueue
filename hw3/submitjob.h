@@ -38,5 +38,16 @@ typedef struct checksum_struct {
 	char *infile;				// input filename
 } checksum;
 
+//struct for file concatenation
+typedef struct concat_struct {
+	char *outfile;
+	char **infiles;
+	int infile_count;
+	// int oflags;
+	// mode_t mode;
+	// unsigned int flags;
+
+} concat;
+
 int nl_bind(int);
 void receive_from_kernel(int);

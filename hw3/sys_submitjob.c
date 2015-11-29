@@ -92,7 +92,7 @@ static void nl_send_msg(int pid, char *msg)
 }
 
 void submit_work_func(struct work_struct *work) {
-	int rc = 0;
+	int rc = 0, i;
 	char *checksum_result = NULL;
 	qwork *in_work = (qwork *)work;
 	struct list_head *pos, *q;
@@ -117,7 +117,8 @@ void submit_work_func(struct work_struct *work) {
 		kfree((xpress *)in_work->task);
 		break;
 	case CHECKSUM:
-		checksum_result = (char *)kzalloc(sizeof(MD5_DIGEST_LENGTH) + 1, GFP_KERNEL);
+		checksum_result = (char *)kzalloc(sizeof(MD5_DIGEST_LENGTH) + 1,
+			GFP_KERNEL);
 		if (!checksum_result) {
 			rc = -ENOMEM;
 			goto free_checksum_data;
@@ -129,7 +130,13 @@ void submit_work_func(struct work_struct *work) {
 			kfree(checksum_result);
 		break;
 	case CONCAT:
-		rc = concat();
+		rc = do_concat((concat *)in_work->task);
+		kfree(((concat *)in_work->task)->outfile);
+		for(i = 0; i < ((concat *)in_work->task)->infile_count; i++) {
+			kfree(((concat *)in_work->task)->infiles[i]);
+		}
+		kfree(((concat *)in_work->task)->infiles);
+		kfree((concat *)in_work->task);
 		break;
 	default:
 		printk("Do something \n");
@@ -161,11 +168,12 @@ void submit_work_func(struct work_struct *work) {
 
 asmlinkage long submitjob(void *arg)
 {
-	long rc = 0;
+	long rc = 0, i;
 	submit_job *job;
 	xcrypt *xcrypt_work = NULL;
 	xpress *xpress_work = NULL;
 	checksum *checksum_work = NULL;
+	concat *concat_work = NULL;
 	qwork *in_work;
 	job_list *node = NULL;
 
@@ -231,7 +239,7 @@ asmlinkage long submitjob(void *arg)
 		job->work = xpress_work;
 
 		printk("job->type = %d\n", job->type);
-		printk("job->type = %d\n", job->pid);
+		printk("job->pid = %d\n", job->pid);
 		printk("job->work->infile = %s\n", ((xpress *)job->work)->infile);
 		printk("job->work->outfile = %s\n", ((xpress *)job->work)->outfile);
 		printk("job->work->algo = %s\n", ((xpress *)job->work)->algo);
@@ -251,12 +259,32 @@ asmlinkage long submitjob(void *arg)
 		job->work = checksum_work;
 
 		printk("job->type = %d\n", job->type);
-		printk("job->type = %d\n", job->pid);
+		printk("job->pid = %d\n", job->pid);
 		printk("job->work = %s\n", ((checksum *)job->work)->infile);
 		break;
 	case CONCAT:
-		job->work = NULL;
-		printk("IMPLEMENT ME!\n");
+		rc = validate_user_concat_args((concat *)((submit_job *)arg)->work);
+		concat_work = (concat *)kzalloc(sizeof(concat), GFP_KERNEL);
+		if (!concat_work) {
+			rc = -ENOMEM;
+			goto free_job;
+		}
+		for(i = 0; i < ((concat *)((submit_job *)arg)->work)->infile_count; i++) {
+			// printk("fine\n");
+			printk("job->infiles[i] = %s\n", (((concat *)((submit_job *)arg)->work)->infiles[i]));
+		}
+		rc = copy_concat_data_to_kernel((concat *)((submit_job *)arg)->work,
+			concat_work);
+		if(rc)
+			goto free_concat;
+		if(!concat_work)
+			printk("work is NULL\n");
+		job->work = concat_work;
+
+		printk("job->type = %d\n", job->type);
+		printk("job->pid = %d\n", job->pid);
+		printk("job->outfile = %s\n", ((concat *)job->work)->outfile);
+		printk("job->infile_count = %d\n", ((concat *)job->work)->infile_count);
 		break;
 	default:
 		pr_err("error\n");
@@ -302,6 +330,9 @@ asmlinkage long submitjob(void *arg)
 		goto free_job;
 	free_checksum:
 		kfree(checksum_work);
+		goto free_job;
+	free_concat:
+		kfree(concat_work);
 		goto free_job;
 	free_job:
 		kfree(job);

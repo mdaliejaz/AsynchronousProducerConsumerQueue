@@ -175,7 +175,7 @@
 
 int main(int argc, char *argv[])
 {
-	int rc = 0, pid;
+	int rc = 0, pid, i, j;
 	submit_job job;
 	char opt, *algo, *password, *res;
 	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
@@ -185,6 +185,7 @@ int main(int argc, char *argv[])
 	xcrypt xcrypt_work;
 	xpress xpress_work;
 	checksum checksum_work;
+	concat concat_work;
 
 	opt = getopt(argc, argv, "t:a:p:h");
 	while (opt != -1) {
@@ -354,6 +355,50 @@ int main(int argc, char *argv[])
 		}
 		printf("0. Type = %d\n", job.type);
 		printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+	} else if (type == CONCAT) {
+		if (!(optind + 2 <= argc)) {
+			fprintf(stderr, "%d = Insufficient number of arguments.\n",
+				optind);
+			return -1;
+		}
+
+		concat_work.infile_count = argc - optind - 1;
+
+		res = realpath(argv[optind], out_realpath);
+		concat_work.outfile =  out_realpath + '\0';
+
+		concat_work.infiles = malloc(sizeof(char *) * concat_work.infile_count);
+
+		for(i = optind + 1, j = 0; i < argc; i++, j++) {
+			res = realpath(argv[i], in_realpath);
+			if (res) {
+				concat_work.infiles[j] = (char *)malloc(strlen(in_realpath) + 1);
+				strcpy(concat_work.infiles[j], in_realpath);
+				concat_work.infiles[j][strlen(in_realpath)] = '\0';
+			}
+			else {
+				perror("realpath of one of the input file");
+				return -1;
+			}
+			printf("infile[%d] = %s\n", j, concat_work.infiles[j]);
+
+			if(strlen(concat_work.infiles[j]) > MAX_FILE_NAME_LENGTH) {
+				fprintf(stderr, "The maximum size of filename allowed is 255 "
+					"characters One of your file name exceeds the allowed "
+					"limit.\n");
+				return -1;
+			}
+		}
+
+		job.type = type;
+		job.work = &concat_work;
+
+		printf("0. Type = %d\n", job.type);
+		printf("0. outfile = %s\n", ((concat *)job.work)->outfile);
+		printf("0. infile count = %d\n", ((concat *)job.work)->infile_count);
+		for(i = 0; i < concat_work.infile_count; i++) {
+			printf("0. infile[%d] = %s\n", i, ((concat *)job.work)->infiles[i]);
+		}
 	}
 
 	pid = getpid();
@@ -375,6 +420,14 @@ int main(int argc, char *argv[])
 
 	// receive_from_kernel(pid);
 
+	if(type == CONCAT) {
+		for(i = 0; i < concat_work.infile_count; i++) {
+			if(!concat_work.infiles[i])
+				free(concat_work.infiles[i]);
+		}
+		if(concat_work.infiles)
+			free(concat_work.infiles);
+	}
 	out:
 	exit(rc);
 }

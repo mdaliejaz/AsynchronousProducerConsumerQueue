@@ -14,7 +14,9 @@ int do_checksum(checksum *, char *);
 int validate_user_checksum_args(checksum *);
 int copy_checksum_data_to_kernel(checksum *, checksum *);
 
-int concat(void);
+int do_concat(concat *);
+int validate_user_concat_args(concat *);
+int copy_concat_data_to_kernel(concat *, concat *);
 
 int validate_file(struct file *, int);
 
