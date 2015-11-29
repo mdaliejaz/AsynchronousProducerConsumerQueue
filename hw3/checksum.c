@@ -5,6 +5,8 @@
 #include <crypto/hash.h>
 #include "jobs.h"
 
+static DEFINE_MUTEX(checksum_mutex);
+
 int do_checksum(checksum *checksum_obj, char *checksum_result) {
 	int rc = 0, size, bytes, i;
 	char *read_buffer;
@@ -30,6 +32,7 @@ int do_checksum(checksum *checksum_obj, char *checksum_result) {
 	}
     infilp->f_pos = 0;		/* start offset */
 
+	mutex_lock(&checksum_mutex);
 	md5 = crypto_alloc_shash("md5", 0, 0);
 	if (md5 == NULL || IS_ERR(md5)) {
 		rc = PTR_ERR(md5);
@@ -65,6 +68,7 @@ int do_checksum(checksum *checksum_obj, char *checksum_result) {
 	if (rc){
 		goto symlink_hash_err;
 	}
+	mutex_unlock(&checksum_mutex);
 
 	for(i = 0; i < 16; i++) {
 		sprintf(&checksum_result[i*2], "%02x", (unsigned int)pass_hash[i]);
