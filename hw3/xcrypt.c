@@ -14,6 +14,141 @@
 
 const u8 *aes_iv = (u8 *) CEPH_AES_IV;
 
+static DEFINE_MUTEX(md5_mutex);
+static DEFINE_MUTEX(encrypt_mutex);
+static DEFINE_MUTEX(decrypt_mutex);
+
+int validate_user_xcrypt_args(xcrypt *user_param)
+{
+	if(user_param == NULL || IS_ERR(user_param) ||
+		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EFAULT;
+	}
+
+	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->infile,
+			sizeof(user_param->infile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->outfile == NULL || IS_ERR(user_param->outfile) ||
+		unlikely(!access_ok(VERIFY_WRITE, user_param->outfile,
+			sizeof(user_param->outfile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->cipher == NULL || IS_ERR(user_param->cipher) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->cipher,
+			sizeof(user_param->cipher)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->keybuf == NULL || IS_ERR(user_param->keybuf) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->keybuf,
+			sizeof(user_param->keybuf)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(user_param->flag == 1 || user_param->flag == 2)) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH ||
+		strlen_user(user_param->outfile) <= MAX_FILE_NAME_LENGTH)) {
+		return -ENAMETOOLONG;
+	}
+
+	return 0;
+}
+
+long copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
+{
+	long rc = 0;
+
+	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
+	if (!kernel_param->infile) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	rc = copy_from_user(kernel_param->infile, user_param->infile,
+		strlen(user_param->infile));
+	if (rc) {
+		printk("Copying of input file failed.\n");
+		goto free_infile;
+	}
+
+	kernel_param->outfile = kzalloc(strlen(user_param->outfile) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->outfile) {
+		rc = -ENOMEM;
+		goto free_infile;
+	}
+	rc = copy_from_user(kernel_param->outfile, user_param->outfile,
+		strlen(user_param->outfile));
+	if (rc) {
+		printk("Copying of output file failed.\n");
+		goto free_outfile;
+	}
+
+	kernel_param->cipher = kzalloc(strlen(user_param->cipher) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->cipher) {
+		rc = -ENOMEM;
+		goto free_outfile;
+	}
+	rc = copy_from_user(kernel_param->cipher, user_param->cipher,
+		strlen(user_param->cipher));
+	if (rc) {
+		printk("Copying of cipher name failed.\n");
+		goto free_cipher;
+	}
+
+	kernel_param->keybuf = kzalloc(strlen(user_param->keybuf) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->keybuf) {
+		rc = -ENOMEM;
+		goto free_cipher;
+	}
+	rc = copy_from_user(kernel_param->keybuf, user_param->keybuf,
+		strlen(user_param->keybuf));
+	if (rc) {
+		printk("Copying of key buffer failed.\n");
+		goto free_keybuf;
+	}
+
+	rc = copy_from_user(&kernel_param->keylen, &user_param->keylen,
+		sizeof(int));
+	if (rc) {
+		printk("Copying of key buffer length failed.\n");
+		goto free_keybuf;
+	}
+
+	rc = copy_from_user(&kernel_param->flag, &user_param->flag, sizeof(int));
+	if (rc) {
+		printk("Copying of encryption/decryption flag failed.\n");
+		goto free_keybuf;
+	}
+
+	return 0;
+
+	free_keybuf:
+		kfree(kernel_param->keybuf);
+	free_cipher:
+		kfree(kernel_param->cipher);
+	free_outfile:
+		kfree(kernel_param->outfile);
+	free_infile:
+		kfree(kernel_param->infile);
+	out:
+		return rc;
+}
+
 int getMD5Hash(char *str, u8 *md5_hash)
 {
 	int rc = 0, size;
@@ -25,6 +160,8 @@ int getMD5Hash(char *str, u8 *md5_hash)
 	 * There are some changes that I've done in this method to suit my needs.
 	 */
 	/* ********* MD5_HASH generating ****** */
+
+	mutex_lock(&md5_mutex);
 	md5 = crypto_alloc_shash("md5", 0, 0);
 	if (md5 == NULL || IS_ERR(md5)) {
 		rc = PTR_ERR(md5);
@@ -54,6 +191,7 @@ int getMD5Hash(char *str, u8 *md5_hash)
 	if (rc){
 		goto symlink_hash_err;
 	}
+	mutex_unlock(&md5_mutex);
 	/* ********* MD5_HASH generated ****** */
 	symlink_hash_err:
 		kfree(sdescmd5);
@@ -67,15 +205,16 @@ int do_encryption(const char *algo, const void *key, int key_len,
                             void *dst, size_t *dst_len,
                             const void *src, size_t src_len)
 {
-	struct scatterlist sg_in[2], sg_out[1];
-	struct crypto_blkcipher *tfm = crypto_alloc_blkcipher(algo, 0,
-		CRYPTO_ALG_ASYNC);
-	struct blkcipher_desc desc = { .tfm = tfm, .flags = 0 };
 	int ret;
 	void *iv;
 	int ivsize;
 	size_t zero_padding = (0x10 - (src_len & 0x0f));
 	char pad[16];
+	struct scatterlist sg_in[2], sg_out[1];
+
+	struct crypto_blkcipher *tfm = crypto_alloc_blkcipher(algo, 0,
+		CRYPTO_ALG_ASYNC);
+	struct blkcipher_desc desc = { .tfm = tfm, .flags = 0 };
 
 	if (IS_ERR(tfm)) {
 		printk("crypto_alloc_blkcipher failed! Check if the cipher "
@@ -100,8 +239,10 @@ int do_encryption(const char *algo, const void *key, int key_len,
 	ivsize = crypto_blkcipher_ivsize(tfm);
 	memcpy(iv, aes_iv, ivsize);
 
+	mutex_lock(&encrypt_mutex);
 	ret = crypto_blkcipher_encrypt(&desc, sg_out, sg_in,
 				       src_len + zero_padding);
+	mutex_unlock(&encrypt_mutex);
 	crypto_free_blkcipher(tfm);
 	if (ret < 0){
 		printk("crypto_blkcipher_encrypt failed!\n");
@@ -114,15 +255,16 @@ int do_decryption(const char *algo, const void *key, int key_len,
                             void *dst, size_t *dst_len,
                             const void *src, size_t src_len)
 {
-	struct scatterlist sg_in[1], sg_out[2];
-	struct crypto_blkcipher *tfm = crypto_alloc_blkcipher(algo, 0,
-		CRYPTO_ALG_ASYNC);
-	struct blkcipher_desc desc = { .tfm = tfm};
 	int ret;
 	void *iv;
 	int ivsize;
 	char pad[16];
 	int last_byte;
+	struct scatterlist sg_in[1], sg_out[2];
+
+	struct crypto_blkcipher *tfm = crypto_alloc_blkcipher(algo, 0,
+		CRYPTO_ALG_ASYNC);
+	struct blkcipher_desc desc = { .tfm = tfm};
 
 	if (IS_ERR(tfm)) {
 		printk("crypto_alloc_blkcipher failed! Check if the cipher "
@@ -141,7 +283,9 @@ int do_decryption(const char *algo, const void *key, int key_len,
 	ivsize = crypto_blkcipher_ivsize(tfm);
 	memcpy(iv, aes_iv, ivsize);
 
+	mutex_lock(&decrypt_mutex);
 	ret = crypto_blkcipher_decrypt(&desc, sg_out, sg_in, src_len);
+	mutex_unlock(&decrypt_mutex);
 	crypto_free_blkcipher(tfm);
 	
 	if (ret < 0){

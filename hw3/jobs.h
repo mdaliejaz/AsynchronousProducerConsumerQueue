@@ -3,6 +3,9 @@
 #define MD5_DIGEST_LENGTH 32
 
 int do_xcrypt(xcrypt *);
+int validate_user_xcrypt_args(xcrypt *);
+long copy_xcrypt_data_to_kernel(xcrypt *, xcrypt *);
+
 int do_xpress(xpress *);
 
 int do_checksum(checksum *, char *);
