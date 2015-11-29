@@ -215,7 +215,6 @@ int do_xpress(xpress *xpress_obj)
     infilp->f_pos = 0;		/* start offset */
 	infile_mode = infilp->f_path.dentry->d_inode->i_mode;
 	infile_size = infilp->f_path.dentry->d_inode->i_size;
-	outfile_size = infile_size;
 
 	tmpfilp = filp_open(tmpfilp_name, O_WRONLY|O_CREAT, infile_mode);
 	rc = validate_file(tmpfilp, 0);
@@ -253,11 +252,13 @@ int do_xpress(xpress *xpress_obj)
 		rc = -ENOMEM;
 		goto close_outfilp;
 	}
-	out_buffer = (char *) kzalloc(infile_size*3, GFP_KERNEL);
+	out_buffer = (char *) kzalloc(infile_size * 3, GFP_KERNEL);
 	if (!out_buffer) {
 		rc = -ENOMEM;
 		goto free_in_buffer;
 	}
+
+	outfile_size = infile_size * 3;
 
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
@@ -269,25 +270,6 @@ int do_xpress(xpress *xpress_obj)
 					infile_size, &outfile_size, xpress_obj->algo);
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
-		// 	&infilp->f_pos)
-		// while ((bytes = infilp->f_op->read(infilp, in_buffer, PAGE_SIZE,
-		// 	&infilp->f_pos)) > 0) {
-		// 	if(bytes < PAGE_SIZE) {
-		// 		rc = compress(in_buffer, out_buffer,
-		// 			bytes, bytes, xpress_obj->algo);
-		// 		tmpfilp->f_op->write(tmpfilp, out_buffer, bytes,
-		// 			&tmpfilp->f_pos);
-		// 	} else {
-		// 		rc = compress(in_buffer, out_buffer,
-		// 			PAGE_SIZE, PAGE_SIZE, xpress_obj->algo);
-		// 		tmpfilp->f_op->write(tmpfilp, out_buffer, PAGE_SIZE,
-		// 			&tmpfilp->f_pos);
-		// 	}
-		// 	if(rc) {
-		// 		printk("Failed while compressing the file.\n");
-		// 		goto reset_fs;
-		// 	}
-		// }
 		break;
 	case DEFLATE:
 		printk("in deflate\n");
@@ -299,24 +281,6 @@ int do_xpress(xpress *xpress_obj)
 		printk("outfile_size = %d\n", outfile_size);
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
-	// 	while ((bytes = infilp->f_op->read(infilp, in_buffer, PAGE_SIZE,
-	// 		&infilp->f_pos)) > 0) {
-	// 		if(bytes < PAGE_SIZE) {
-	// 			rc = deflate(in_buffer, out_buffer,
-	// 				bytes, bytes, xpress_obj->algo);
-	// 			tmpfilp->f_op->write(tmpfilp, out_buffer, bytes,
-	// 				&tmpfilp->f_pos);
-	// 		} else {
-	// 			rc = deflate(in_buffer, out_buffer,
-	// 				PAGE_SIZE, PAGE_SIZE, xpress_obj->algo);
-	// 			tmpfilp->f_op->write(tmpfilp, out_buffer, PAGE_SIZE,
-	// 				&tmpfilp->f_pos);
-	// 		}
-	// 		if(rc) {
-	// 			printk("Failed while deflating the file.\n");
-	// 			goto reset_fs;
-	// 		}
-	// 	}
 		break;
 	default:
 		printk("Unknown Flag!\n");
