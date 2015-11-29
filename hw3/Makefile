@@ -1,5 +1,5 @@
 obj-m += mod_submitjob.o
-mod_submitjob-y := sys_submitjob.o xcrypt.o xpress.o checksum.o concat.o
+mod_submitjob-y := sys_submitjob.o xcrypt.o xpress.o checksum.o concat.o shared.o
 
 INC=/lib/modules/$(shell uname -r)/build/arch/x86/include
 

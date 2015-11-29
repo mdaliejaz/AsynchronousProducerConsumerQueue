@@ -1,10 +1,12 @@
 #include "submitjob.h"
 
+#define MD5_DIGEST_LENGTH 32
+
 int do_xcrypt(xcrypt *);
-int compress(void);
-int decompress(void);
-int checksum(void);
+int do_xpress(xpress *);
+int do_checksum(checksum *, char *);
 int concat(void);
+int validate_file(struct file *, int);
 
 typedef struct queue_work {
 	struct work_struct worker;

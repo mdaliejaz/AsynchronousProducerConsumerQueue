@@ -407,8 +407,10 @@ static void  __exit exit_sys_submitjob(void)
 {
 	if (sysptr != NULL)
 		sysptr = NULL;
-	if (work_queue)
+	if (work_queue) {
+		flush_workqueue(work_queue);
 		destroy_workqueue(work_queue);
+	}
 	atomic_set(&queue_size, 0);
 	atomic_set(&unique_id, 0);
 	netlink_kernel_release(nl_sk);
