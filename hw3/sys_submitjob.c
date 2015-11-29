@@ -162,6 +162,151 @@ long copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
 		return rc;
 }
 
+long validate_user_xpress_args(xpress *user_param) {
+	if(user_param == NULL || IS_ERR(user_param) ||
+		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EFAULT;
+	}
+
+	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->infile,
+			sizeof(user_param->infile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->outfile == NULL || IS_ERR(user_param->outfile) ||
+		unlikely(!access_ok(VERIFY_WRITE, user_param->outfile,
+			sizeof(user_param->outfile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->algo == NULL || IS_ERR(user_param->algo) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->algo,
+			sizeof(user_param->algo)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(user_param->flag == COMPRESS || user_param->flag == DEFLATE)) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH ||
+		strlen_user(user_param->outfile) <= MAX_FILE_NAME_LENGTH)) {
+		return -ENAMETOOLONG;
+	}
+	return 0;
+}
+
+long copy_xpress_data_to_kernel(xpress *user_param, xpress *kernel_param)
+{
+	long rc = 0;
+
+	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
+	if (!kernel_param->infile) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	rc = copy_from_user(kernel_param->infile, user_param->infile,
+		strlen(user_param->infile));
+	if (rc) {
+		printk("Copying of input file failed.\n");
+		goto free_infile;
+	}
+
+	kernel_param->outfile = kzalloc(strlen(user_param->outfile) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->outfile) {
+		rc = -ENOMEM;
+		goto free_infile;
+	}
+	rc = copy_from_user(kernel_param->outfile, user_param->outfile,
+		strlen(user_param->outfile));
+	if (rc) {
+		printk("Copying of output file failed.\n");
+		goto free_outfile;
+	}
+
+	kernel_param->algo = kzalloc(strlen(user_param->algo) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->algo) {
+		rc = -ENOMEM;
+		goto free_outfile;
+	}
+	rc = copy_from_user(kernel_param->algo, user_param->algo,
+		strlen(user_param->algo));
+	if (rc) {
+		printk("Copying of cipher name failed.\n");
+		goto free_algo;
+	}
+
+	rc = copy_from_user(&kernel_param->flag, &user_param->flag, sizeof(int));
+	if (rc) {
+		printk("Copying of encryption/decryption flag failed.\n");
+		goto free_algo;
+	}
+
+	return 0;
+
+	free_algo:
+		kfree(kernel_param->algo);
+	free_outfile:
+		kfree(kernel_param->outfile);
+	free_infile:
+		kfree(kernel_param->infile);
+	out:
+		return rc;
+}
+
+long validate_user_checksum_args(checksum *user_param) {
+	if(user_param == NULL || IS_ERR(user_param) ||
+		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EFAULT;
+	}
+
+	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->infile,
+			sizeof(user_param->infile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH)) {
+		return -ENAMETOOLONG;
+	}
+	return 0;
+}
+
+long copy_checksum_data_to_kernel(checksum *user_param, checksum *kernel_param)
+{
+	long rc = 0;
+
+	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
+	if (!kernel_param->infile) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	rc = copy_from_user(kernel_param->infile, user_param->infile,
+		strlen(user_param->infile));
+	if (rc) {
+		printk("Copying of input file failed.\n");
+		goto free_infile;
+	}
+
+	return 0;
+
+	free_infile:
+		kfree(kernel_param->infile);
+	out:
+		return rc;
+}
+
+
 // static void nl_recv_msg(struct sk_buff *skb)
 // {
 // 
@@ -223,6 +368,7 @@ static void nl_send_msg(int pid, char *msg)
 
 void submit_work_func(struct work_struct *work) {
 	int rc = 0;
+	char *checksum_result = NULL;
 	qwork *in_work = (qwork *)work;
 	struct list_head *pos, *q;
 	job_list *node = NULL;
@@ -238,13 +384,24 @@ void submit_work_func(struct work_struct *work) {
 		kfree((xcrypt *)in_work->task);
 		break;
 	case COMPRESS:
-		rc = compress();
-		break;
-	case DECOMPRESS:
-		rc = decompress();
+	case DEFLATE:
+		rc = do_xpress((xpress *)in_work->task);
+		kfree(((xpress *)in_work->task)->infile);
+		kfree(((xpress *)in_work->task)->outfile);
+		kfree(((xpress *)in_work->task)->algo);
+		kfree((xpress *)in_work->task);
 		break;
 	case CHECKSUM:
-		rc = checksum();
+		checksum_result = (char *)kzalloc(sizeof(MD5_DIGEST_LENGTH) + 1, GFP_KERNEL);
+		if (!checksum_result) {
+			rc = -ENOMEM;
+			goto free_checksum_data;
+		}
+		rc = do_checksum((checksum *)in_work->task, checksum_result);
+		printk("checksum_result = %s\n", checksum_result);
+		free_checksum_data:
+			kfree((checksum *)in_work->task);
+			kfree(checksum_result);
 		break;
 	case CONCAT:
 		rc = concat();
@@ -282,6 +439,8 @@ asmlinkage long submitjob(void *arg)
 	long rc = 0;
 	submit_job *job;
 	xcrypt *xcrypt_work = NULL;
+	xpress *xpress_work = NULL;
+	checksum *checksum_work = NULL;
 	qwork *in_work;
 	job_list *node = NULL;
 
@@ -323,10 +482,53 @@ asmlinkage long submitjob(void *arg)
 		if(rc)
 			goto free_xcrypt;
 		job->work = xcrypt_work;
+
+		printk("job->type = %d\n", job->type);
+		printk("job->work->infile = %s\n", ((xcrypt *)job->work)->infile);
+		printk("job->work->outfile = %s\n", ((xcrypt *)job->work)->outfile);
+		printk("job->work->cipher = %s\n", ((xcrypt *)job->work)->cipher);
+		printk("job->work->keybuf = %s\n", ((xcrypt *)job->work)->keybuf);
+		printk("job->work->keylen = %d\n", ((xcrypt *)job->work)->keylen);
+		printk("job->work->flag = %d\n", ((xcrypt *)job->work)->flag);
 		break;
 	case COMPRESS:
-	case DECOMPRESS:
+	case DEFLATE:
+		rc = validate_user_xpress_args((xpress *)((submit_job *)arg)->work);
+		xpress_work = (xpress *)kzalloc(sizeof(xpress), GFP_KERNEL);
+		if (!xpress_work) {
+			rc = -ENOMEM;
+			goto free_job;
+		}
+		rc = copy_xpress_data_to_kernel((xpress *)((submit_job *)arg)->work,
+			xpress_work);
+		if(rc)
+			goto free_xpress;
+		job->work = xpress_work;
+
+		printk("job->type = %d\n", job->type);
+		printk("job->type = %d\n", job->pid);
+		printk("job->work->infile = %s\n", ((xpress *)job->work)->infile);
+		printk("job->work->outfile = %s\n", ((xpress *)job->work)->outfile);
+		printk("job->work->algo = %s\n", ((xpress *)job->work)->algo);
+		printk("job->work->flag = %d\n", ((xpress *)job->work)->flag);
+		break;
 	case CHECKSUM:
+		rc = validate_user_checksum_args((checksum *)((submit_job *)arg)->work);
+		checksum_work = (checksum *)kzalloc(sizeof(checksum), GFP_KERNEL);
+		if (!checksum_work) {
+			rc = -ENOMEM;
+			goto free_job;
+		}
+		rc = copy_checksum_data_to_kernel((checksum *)((submit_job *)arg)->work,
+			checksum_work);
+		if(rc)
+			goto free_checksum;
+		job->work = checksum_work;
+
+		printk("job->type = %d\n", job->type);
+		printk("job->type = %d\n", job->pid);
+		printk("job->work = %s\n", ((checksum *)job->work)->infile);
+		break;
 	case CONCAT:
 		job->work = NULL;
 		printk("IMPLEMENT ME!\n");
@@ -336,17 +538,10 @@ asmlinkage long submitjob(void *arg)
 		return -1;
 	}
 
-	printk("job->type = %d\n", job->type);
-	printk("job->work->infile = %s\n", ((xcrypt *)job->work)->infile);
-	printk("job->work->outfile = %s\n", ((xcrypt *)job->work)->outfile);
-	printk("job->work->cipher = %s\n", ((xcrypt *)job->work)->cipher);
-	printk("job->work->keybuf = %s\n", ((xcrypt *)job->work)->keybuf);
-	printk("job->work->keylen = %d\n", ((xcrypt *)job->work)->keylen);
-	printk("job->work->flag = %d\n", ((xcrypt *)job->work)->flag);
-
 	node = (job_list *)kzalloc(sizeof(job_list), GFP_KERNEL);
 	if(!node) {
 		rc = -ENOMEM;
+		// handle this goto
 		goto free_xcrypt;
 	}
 
@@ -376,6 +571,13 @@ asmlinkage long submitjob(void *arg)
 		kfree(node);
 	free_xcrypt:
 		kfree(xcrypt_work);
+		goto free_job;
+	free_xpress:
+		kfree(xpress_work);
+		goto free_job;
+	free_checksum:
+		kfree(checksum_work);
+		goto free_job;
 	free_job:
 		kfree(job);
 	out:

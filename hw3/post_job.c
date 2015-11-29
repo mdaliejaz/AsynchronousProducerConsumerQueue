@@ -183,6 +183,8 @@ int main(int argc, char *argv[])
 	int type = 0, t_found = 0, a_found = 0, p_found = 0;
 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
 	xcrypt xcrypt_work;
+	xpress xpress_work;
+	checksum checksum_work;
 
 	opt = getopt(argc, argv, "t:a:p:h");
 	while (opt != -1) {
@@ -280,24 +282,90 @@ int main(int argc, char *argv[])
 				"limit.\n");
 			return -1;
 		}
-	}
+		// printf("0. Type = %d\n", job.type);
+		// printf("0. algo = %s\n", ((xcrypt *)job.work)->cipher);
+		// printf("0. keybuf = %s\n", ((xcrypt *)job.work)->keybuf);
+		// printf("0. infile = %s\n", ((xcrypt *)job.work)->infile);
+		// printf("0. outfile = %s\n", ((xcrypt *)job.work)->outfile);
+		// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
+		// printf("0. flags = %d\n", ((xcrypt *)job.work)->flag);
+	} else if (type == COMPRESS || type == DEFLATE) {
+		if (optind + 2 != argc) {
+			fprintf(stderr, "%d = Insufficient number of arguments.\n",
+				optind);
+			return -1;
+		}
 
-	// printf("0. Type = %d\n", job.type);
-	// printf("0. algo = %s\n", ((xcrypt *)job.work)->cipher);
-	// printf("0. keybuf = %s\n", ((xcrypt *)job.work)->keybuf);
-	// printf("0. infile = %s\n", ((xcrypt *)job.work)->infile);
-	// printf("0. outfile = %s\n", ((xcrypt *)job.work)->outfile);
-	// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
-	// printf("0. flags = %d\n", ((xcrypt *)job.work)->flags);
+		res = realpath(argv[optind], in_realpath);
+		if (res) {
+			xpress_work.infile =  in_realpath + '\0';
+		}
+		else {
+			perror("realpath");
+			return -1;
+		}
+
+		res = realpath(argv[optind + 1], out_realpath);
+		// No error check as the file might not exist
+		xpress_work.outfile =  out_realpath + '\0';
+
+		xpress_work.algo = algo + '\0';
+		xpress_work.flag = type;
+
+		job.type = type;
+		printf("type = %d\n", type);
+		job.work = &xpress_work;
+
+		if(strlen(xpress_work.infile) > MAX_FILE_NAME_LENGTH ||
+			strlen(xpress_work.outfile) > MAX_FILE_NAME_LENGTH) {
+			fprintf(stderr, "The maximum size of filename allowed is 255 "
+				"characters One of your file name exceeds the allowed "
+				"limit.\n");
+			return -1;
+		}
+		printf("0. Type = %d\n", job.type);
+		printf("0. algo = %s\n", ((xpress *)job.work)->algo);
+		printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+		printf("0. outfile = %s\n", ((xpress *)job.work)->outfile);
+		printf("0. flags = %d\n", ((xpress *)job.work)->flag);
+	} else if (type == CHECKSUM) {
+		if (optind + 1 != argc) {
+			fprintf(stderr, "%d = Insufficient number of arguments.\n",
+				optind);
+			return -1;
+		}
+
+		res = realpath(argv[optind], in_realpath);
+		if (res) {
+			checksum_work.infile =  in_realpath + '\0';
+		}
+		else {
+			perror("realpath");
+			return -1;
+		}
+		job.type = type;
+		job.work = &checksum_work;
+
+		if(strlen(checksum_work.infile) > MAX_FILE_NAME_LENGTH) {
+			fprintf(stderr, "The maximum size of filename allowed is 255 "
+				"characters One of your file name exceeds the allowed "
+				"limit.\n");
+			return -1;
+		}
+		printf("0. Type = %d\n", job.type);
+		printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+	}
 
 	pid = getpid();
 	job.pid = pid;
-	rc = nl_bind(pid);
+	// rc = nl_bind(pid);
 	if(rc) {
 		goto out;
 	}
 
 	printf("pid = %d\n", pid);
+
+	printf("type = %d\n", job.type);
 
 	rc = syscall(__NR_submitjob, (void *) &job);
 	if (rc == 0)
@@ -305,7 +373,7 @@ int main(int argc, char *argv[])
 	else
 		printf("syscall returned %d (errno=%d)\n", rc, errno);
 
-	receive_from_kernel(pid);
+	// receive_from_kernel(pid);
 
 	out:
 	exit(rc);

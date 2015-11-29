@@ -1,7 +1,7 @@
 #define ENCRYPT 1
 #define DECRYPT 2
 #define COMPRESS 3
-#define DECOMPRESS 4
+#define DEFLATE 4
 #define CHECKSUM 5
 #define CONCAT 6
 
@@ -24,6 +24,19 @@ typedef struct encrypt_decrypt_struct {
 	int keylen;					// length of the passphrase
 	int flag;					// encryption or decryption: encryption = 1
 } xcrypt;
+
+//struct for compression/decompression
+typedef struct compress_decompress_struct {
+	char *infile;				// input filename
+	char *outfile;				// outputp filename
+	char *algo;					// compression/decompression algorithm used
+	int flag;					// encryption or decryption: encryption = 1
+} xpress;
+
+//struct for checksum
+typedef struct checksum_struct {
+	char *infile;				// input filename
+} checksum;
 
 int nl_bind(int);
 void receive_from_kernel(int);
