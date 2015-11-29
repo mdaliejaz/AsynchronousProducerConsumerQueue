@@ -67,9 +67,9 @@ int validate_user_xcrypt_args(xcrypt *user_param)
 	return 0;
 }
 
-long copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
+int copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
 {
-	long rc = 0;
+	int rc = 0;
 
 	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
 	if (!kernel_param->infile) {

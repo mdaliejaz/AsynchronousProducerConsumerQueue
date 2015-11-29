@@ -8,6 +8,107 @@
 static DEFINE_MUTEX(compr_mutex);
 static DEFINE_MUTEX(dcompr_mutex);
 
+int validate_user_xpress_args(xpress *user_param)
+{
+	if(user_param == NULL || IS_ERR(user_param) ||
+		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EFAULT;
+	}
+
+	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->infile,
+			sizeof(user_param->infile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->outfile == NULL || IS_ERR(user_param->outfile) ||
+		unlikely(!access_ok(VERIFY_WRITE, user_param->outfile,
+			sizeof(user_param->outfile)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(user_param->algo == NULL || IS_ERR(user_param->algo) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->algo,
+			sizeof(user_param->algo)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(user_param->flag == COMPRESS || user_param->flag == DEFLATE)) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
+	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH ||
+		strlen_user(user_param->outfile) <= MAX_FILE_NAME_LENGTH)) {
+		return -ENAMETOOLONG;
+	}
+	return 0;
+}
+
+int copy_xpress_data_to_kernel(xpress *user_param, xpress *kernel_param)
+{
+	int rc = 0;
+
+	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
+	if (!kernel_param->infile) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	rc = copy_from_user(kernel_param->infile, user_param->infile,
+		strlen(user_param->infile));
+	if (rc) {
+		printk("Copying of input file failed.\n");
+		goto free_infile;
+	}
+
+	kernel_param->outfile = kzalloc(strlen(user_param->outfile) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->outfile) {
+		rc = -ENOMEM;
+		goto free_infile;
+	}
+	rc = copy_from_user(kernel_param->outfile, user_param->outfile,
+		strlen(user_param->outfile));
+	if (rc) {
+		printk("Copying of output file failed.\n");
+		goto free_outfile;
+	}
+
+	kernel_param->algo = kzalloc(strlen(user_param->algo) + 1,
+		GFP_KERNEL);
+	if (!kernel_param->algo) {
+		rc = -ENOMEM;
+		goto free_outfile;
+	}
+	rc = copy_from_user(kernel_param->algo, user_param->algo,
+		strlen(user_param->algo));
+	if (rc) {
+		printk("Copying of cipher name failed.\n");
+		goto free_algo;
+	}
+
+	rc = copy_from_user(&kernel_param->flag, &user_param->flag, sizeof(int));
+	if (rc) {
+		printk("Copying of encryption/decryption flag failed.\n");
+		goto free_algo;
+	}
+
+	return 0;
+
+	free_algo:
+		kfree(kernel_param->algo);
+	free_outfile:
+		kfree(kernel_param->outfile);
+	free_infile:
+		kfree(kernel_param->infile);
+	out:
+		return rc;
+}
+
 int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 	char* compr_name) {
 	int rc = 0;
@@ -255,6 +356,5 @@ int do_xpress(xpress *xpress_obj)
 	close_infilp:
 		if (infilp && !IS_ERR(infilp))
 			filp_close(infilp, NULL);
-	out:
-		return rc;
+	return rc;
 }

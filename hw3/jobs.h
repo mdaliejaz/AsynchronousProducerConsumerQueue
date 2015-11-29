@@ -4,15 +4,18 @@
 
 int do_xcrypt(xcrypt *);
 int validate_user_xcrypt_args(xcrypt *);
-long copy_xcrypt_data_to_kernel(xcrypt *, xcrypt *);
+int copy_xcrypt_data_to_kernel(xcrypt *, xcrypt *);
 
 int do_xpress(xpress *);
+int validate_user_xpress_args(xpress *);
+int copy_xpress_data_to_kernel(xpress *, xpress *);
 
 int do_checksum(checksum *, char *);
 int validate_user_checksum_args(checksum *);
 int copy_checksum_data_to_kernel(checksum *, checksum *);
 
 int concat(void);
+
 int validate_file(struct file *, int);
 
 typedef struct queue_work {
