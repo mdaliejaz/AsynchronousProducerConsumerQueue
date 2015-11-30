@@ -14,6 +14,7 @@
 typedef struct submit_job {
 	int pid;
 	int type;
+	int priority;
 	void *work;
 } submit_job;
 

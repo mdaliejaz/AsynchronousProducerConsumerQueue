@@ -22,45 +22,46 @@ int validate_user_xcrypt_args(xcrypt *user_param)
 {
 	if(user_param == NULL || IS_ERR(user_param) ||
 		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
-		pr_err("user parameters are not valid!\n");
+		pr_err("En/Decryption User Parameters are Not Valid!\n");
 		return -EFAULT;
 	}
 
 	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
 		unlikely(!access_ok(VERIFY_READ, user_param->infile,
 			sizeof(user_param->infile)))) {
-		pr_err("user parameters are not valid!\n");
+		pr_err("En/Decryption Input File Parameter is Not Valid!\n");
 		return -EINVAL;
 	}
 
 	if(user_param->outfile == NULL || IS_ERR(user_param->outfile) ||
 		unlikely(!access_ok(VERIFY_WRITE, user_param->outfile,
 			sizeof(user_param->outfile)))) {
-		pr_err("user parameters are not valid!\n");
+		pr_err("En/Decryption Output File Parameter is Not Valid!\n");
 		return -EINVAL;
 	}
 
 	if(user_param->cipher == NULL || IS_ERR(user_param->cipher) ||
 		unlikely(!access_ok(VERIFY_READ, user_param->cipher,
 			sizeof(user_param->cipher)))) {
-		pr_err("user parameters are not valid!\n");
+		pr_err("En/Decryption Cipher Parameter is Not Valid!\n");
 		return -EINVAL;
 	}
 
 	if(user_param->keybuf == NULL || IS_ERR(user_param->keybuf) ||
 		unlikely(!access_ok(VERIFY_READ, user_param->keybuf,
 			sizeof(user_param->keybuf)))) {
-		pr_err("user parameters are not valid!\n");
+		pr_err("En/Decryption Passphrase Parameter is Not Valid!\n");
 		return -EINVAL;
 	}
 
 	if(!(user_param->flag == 1 || user_param->flag == 2)) {
-		pr_err("user parameters are not valid!\n");
+		pr_err("En/Decryption User Parameters are Not Valid!\n");
 		return -EINVAL;
 	}
 
 	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH ||
 		strlen_user(user_param->outfile) <= MAX_FILE_NAME_LENGTH)) {
+		pr_err("En/Decryption Input/Output File is too long!\n");
 		return -ENAMETOOLONG;
 	}
 
@@ -73,80 +74,89 @@ int copy_xcrypt_data_to_kernel(xcrypt *user_param, xcrypt *kernel_param)
 
 	kernel_param->infile = kzalloc(strlen(user_param->infile) + 1, GFP_KERNEL);
 	if (!kernel_param->infile) {
+		pr_err("En/Decryption Input File: Failed to allocate memeory.\n");
 		rc = -ENOMEM;
 		goto out;
 	}
 	rc = copy_from_user(kernel_param->infile, user_param->infile,
 		strlen(user_param->infile));
 	if (rc) {
-		printk("Copying of input file failed.\n");
+		printk("En/Decryption: Copying of input file failed.\n");
 		goto free_infile;
 	}
 
 	kernel_param->outfile = kzalloc(strlen(user_param->outfile) + 1,
 		GFP_KERNEL);
 	if (!kernel_param->outfile) {
+		pr_err("En/Decryption Output File: Failed to allocate memeory.\n");
 		rc = -ENOMEM;
 		goto free_infile;
 	}
 	rc = copy_from_user(kernel_param->outfile, user_param->outfile,
 		strlen(user_param->outfile));
 	if (rc) {
-		printk("Copying of output file failed.\n");
+		printk("En/Decryption: Copying of output file failed.\n");
 		goto free_outfile;
 	}
 
 	kernel_param->cipher = kzalloc(strlen(user_param->cipher) + 1,
 		GFP_KERNEL);
 	if (!kernel_param->cipher) {
+		pr_err("En/Decryption Cipher: Failed to allocate memeory.\n");
 		rc = -ENOMEM;
 		goto free_outfile;
 	}
 	rc = copy_from_user(kernel_param->cipher, user_param->cipher,
 		strlen(user_param->cipher));
 	if (rc) {
-		printk("Copying of cipher name failed.\n");
+		printk("En/Decryption: Copying of cipher name failed.\n");
 		goto free_cipher;
 	}
 
 	kernel_param->keybuf = kzalloc(strlen(user_param->keybuf) + 1,
 		GFP_KERNEL);
 	if (!kernel_param->keybuf) {
+		pr_err("En/Decryption Passphrase: Failed to allocate memeory.\n");
 		rc = -ENOMEM;
 		goto free_cipher;
 	}
 	rc = copy_from_user(kernel_param->keybuf, user_param->keybuf,
 		strlen(user_param->keybuf));
 	if (rc) {
-		printk("Copying of key buffer failed.\n");
+		printk("En/Decryption: Copying of Passphrase failed.\n");
 		goto free_keybuf;
 	}
 
 	rc = copy_from_user(&kernel_param->keylen, &user_param->keylen,
 		sizeof(int));
 	if (rc) {
-		printk("Copying of key buffer length failed.\n");
+		printk("En/Decryption: Copying of key buffer length failed.\n");
 		goto free_keybuf;
 	}
 
 	rc = copy_from_user(&kernel_param->flag, &user_param->flag, sizeof(int));
 	if (rc) {
-		printk("Copying of encryption/decryption flag failed.\n");
+		printk("En/Decryption: Copying of encryption/decryption flag "
+			"failed.\n");
 		goto free_keybuf;
 	}
 
-	return 0;
+	goto out;
 
-	free_keybuf:
+free_keybuf:
+	if(kernel_param->keybuf)
 		kfree(kernel_param->keybuf);
-	free_cipher:
+free_cipher:
+	if(kernel_param->cipher)
 		kfree(kernel_param->cipher);
-	free_outfile:
+free_outfile:
+	if(kernel_param->outfile)
 		kfree(kernel_param->outfile);
-	free_infile:
+free_infile:
+	if(kernel_param->infile)
 		kfree(kernel_param->infile);
-	out:
-		return rc;
+out:
+	return rc;
 }
 
 int getMD5Hash(char *str, u8 *md5_hash)
