@@ -4,6 +4,8 @@
 #define DEFLATE 4
 #define CHECKSUM 5
 #define CONCAT 6
+#define LIST_JOB 7
+#define REMOVE_JOB 8
 
 #define MAX_FILE_NAME_LENGTH 255
 #define AES_BLOCK_SIZE 16
@@ -46,7 +48,6 @@ typedef struct concat_struct {
 	// int oflags;
 	// mode_t mode;
 	// unsigned int flags;
-
 } concat;
 
 int nl_bind(int);

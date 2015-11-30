@@ -177,17 +177,17 @@ int main(int argc, char *argv[])
 {
 	int rc = 0, pid, i, j;
 	submit_job job;
-	char opt, *algo, *password, *res;
+	char opt, *algo, *password, *res, *job_list, *junk;
 	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
-	int passlen = 0;
-	int type = 0, t_found = 0, a_found = 0, p_found = 0;
+	int passlen = 0, remove_pid;
+	int type = 0, t_found = 0, a_found = 0, p_found = 0, r_found = 0;
 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
 	xcrypt xcrypt_work;
 	xpress xpress_work;
 	checksum checksum_work;
 	concat concat_work;
 
-	opt = getopt(argc, argv, "t:a:p:h");
+	opt = getopt(argc, argv, "t:a:p:r:h");
 	while (opt != -1) {
 		switch (opt) {
 		case 't':
@@ -209,14 +209,14 @@ int main(int argc, char *argv[])
 		case 'a':
 			if (a_found) {
 				fprintf(stderr, "Algorithm to be used can be specified only "
-				        "once\n");
+				        "once!\n");
 			}
 			a_found = 1;
 			algo = optarg;
 			break;
 		case 'p':
 			if (p_found) {
-				fprintf(stderr, "Passphrase can be specified only once\n");
+				fprintf(stderr, "Passphrase can be specified only once!\n");
 			}
 			p_found = 1;
 
@@ -231,6 +231,15 @@ int main(int argc, char *argv[])
 			MD5((unsigned char*) password, passlen, pass_hash);
 			pass_hash[passlen] = '\0';
 			break;
+		case 'r':
+			if (r_found) {
+				fprintf(stderr, "You can remove only one job at a time!\n");
+			}
+			r_found = 1;
+
+			remove_pid = strtol(optarg, &junk, 10);
+			printf("ID = %d\n", remove_pid);
+			break;
 		case 'h':
 			printf("./post_job: UNIMPLEMENTED.\n");
 			return 0;
@@ -238,7 +247,7 @@ int main(int argc, char *argv[])
 			printf("./post_job: Try './post_job -h' for more information.\n");
 			return -1;
 		}
-		opt = getopt(argc, argv, "t:a:p:h");
+		opt = getopt(argc, argv, "t:a:p:r:h");
 	}
 
 	// add type check validation
@@ -399,6 +408,18 @@ int main(int argc, char *argv[])
 		for(i = 0; i < concat_work.infile_count; i++) {
 			printf("0. infile[%d] = %s\n", i, ((concat *)job.work)->infiles[i]);
 		}
+	} else if (type == LIST_JOB) {
+		job.type = type;
+		job_list = (char *)malloc(sizeof(int) * 100);
+		job.work = job_list;
+	} else if (type == REMOVE_JOB) {
+		if (!r_found) {
+			fprintf(stderr, "You must specify the Job ID of the process to be deleted.\n");
+			goto out;
+		}
+		job.type = type;
+		job.work = &remove_pid;
+		printf("removing ID = %d\n", remove_pid);
 	}
 
 	pid = getpid();
@@ -428,6 +449,12 @@ int main(int argc, char *argv[])
 		if(concat_work.infiles)
 			free(concat_work.infiles);
 	}
+
+	if(type == LIST_JOB) {
+		printf("List of Jobs in queue:\n%s", job_list);
+		free(job_list);
+	}
+
 	out:
 	exit(rc);
 }
