@@ -19,15 +19,15 @@ int main(int argc, char *argv[])
 	submit_job job;
 	char opt, *algo, *password, *res, *job_list, *junk;
 	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
-	int passlen = 0, remove_pid;
-	int type = 0, t_found = 0, a_found = 0, p_found = 0, r_found = 0;
+	int passlen = 0, job_id;
+	int type = 0, t_found = 0, a_found = 0, p_found = 0, i_found = 0;
 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
 	xcrypt xcrypt_work;
 	xpress xpress_work;
 	checksum checksum_work;
 	concat concat_work;
 
-	opt = getopt(argc, argv, "t:a:p:r:Ph");
+	opt = getopt(argc, argv, "t:a:p:i:Ph");
 	while (opt != -1) {
 		switch (opt) {
 		case 't':
@@ -71,17 +71,19 @@ int main(int argc, char *argv[])
 			MD5((unsigned char*) password, passlen, pass_hash);
 			pass_hash[passlen] = '\0';
 			break;
-		case 'r':
-			if (r_found) {
-				fprintf(stderr, "You can remove only one job at a time!\n");
+		case 'i':
+			if (i_found) {
+				fprintf(stderr, "You can remove/swap priority of "
+					"only one job at a time!\n");
 			}
-			r_found = 1;
+			i_found = 1;
 
-			remove_pid = strtol(optarg, &junk, 10);
-			printf("ID = %d\n", remove_pid);
+			job_id = strtol(optarg, &junk, 10);
+			printf("ID = %d\n", job_id);
 			break;
 		case 'P':
 			priority = 1;
+			printf("Priority job = %d\n", type);
 			break;
 		case 'h':
 			printf("./post_job: UNIMPLEMENTED.\n");
@@ -90,7 +92,7 @@ int main(int argc, char *argv[])
 			printf("./post_job: Try './post_job -h' for more information.\n");
 			return -1;
 		}
-		opt = getopt(argc, argv, "t:a:p:r:Ph");
+		opt = getopt(argc, argv, "t:a:p:i:Ph");
 	}
 
 	// add type check validation
@@ -256,13 +258,21 @@ int main(int argc, char *argv[])
 		job_list = (char *)malloc(sizeof(int) * 100);
 		job.work = job_list;
 	} else if (type == REMOVE_JOB) {
-		if (!r_found) {
+		if (!i_found) {
 			fprintf(stderr, "You must specify the Job ID of the process to be deleted.\n");
 			goto out;
 		}
 		job.type = type;
-		job.work = &remove_pid;
-		printf("removing ID = %d\n", remove_pid);
+		job.work = &job_id;
+		printf("removing ID = %d\n", job_id);
+	} else if (type == SWAP_JOB_PRIORITY) {
+		if (!i_found) {
+			fprintf(stderr, "You must specify the Job ID of the process to be deleted.\n");
+			goto out;
+		}
+		job.type = type;
+		job.work = &job_id;
+		printf("swap priority ID = %d\n", job_id);
 	}
 
 	job.priority = priority;

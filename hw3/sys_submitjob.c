@@ -81,7 +81,7 @@ void submit_work_func(struct work_struct *work) {
 	struct list_head *pos, *q;
 	job_list *node = NULL;
 
-	// msleep(20000);
+	msleep(6000);
 	switch(in_work->type) {
 	case ENCRYPT:
 	case DECRYPT:
@@ -168,7 +168,7 @@ void submit_work_func(struct work_struct *work) {
 asmlinkage long submitjob(void *arg)
 {
 	long rc = 0;
-	int delete_job_id, i;
+	int job_id, i;
 	char return_job_list[200] = {0}, job_detail[20];
 	submit_job *job;
 	xcrypt *xcrypt_work = NULL;
@@ -327,14 +327,18 @@ asmlinkage long submitjob(void *arg)
 	case REMOVE_JOB:
 		// printk("(int *)((submit_job *)arg)->work = %d\n",
 		// 	*(int *)((submit_job *)arg)->work);
-		rc = copy_from_user(&delete_job_id, (int *)((submit_job *)arg)->work,
+		rc = copy_from_user(&job_id, (int *)((submit_job *)arg)->work,
 			sizeof(int));
 		spin_lock(&list_lock);
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
-			if(delete_job_id == node->id) {
-				pr_debug("deleting id = %d\n", node->id);
+			if(job_id == node->id) {
+				printk("deleting id = %d\n", node->id);
 				rc = cancel_work_sync(node->queued_job);
+				if(node->priority)
+					atomic_dec(&priority_queue_size);
+				else
+					atomic_dec(&queue_size);
 				if(rc) {
 					if(node != NULL)
 						in_work = (qwork *)node->queued_job;
@@ -405,7 +409,60 @@ asmlinkage long submitjob(void *arg)
 					rc = 0;
 				} else {
 					pr_err("Could Not Delete Job with ID = %d.\n",
-						delete_job_id);
+						job_id);
+					rc = -1;
+				}
+			}
+		}
+		spin_unlock(&list_lock);
+		pr_debug("free job\n");
+		goto free_job;
+		break;
+	case SWAP_JOB_PRIORITY:
+		rc = copy_from_user(&job_id, (int *)((submit_job *)arg)->work,
+			sizeof(int));
+		spin_lock(&list_lock);
+		list_for_each_safe(pos, q, &head) {
+			node = list_entry(pos, job_list, list);
+			if(job_id == node->id) {
+				pr_debug("deleting id = %d\n", node->id);
+				rc = cancel_work_sync(node->queued_job);
+				if(node->priority)
+					atomic_dec(&priority_queue_size);
+				else
+					atomic_dec(&queue_size);
+				if(rc) {
+					if(node != NULL) {
+						if(node->priority) {
+							node->priority = 0;
+							((qwork *)node->queued_job)->priority = 0;
+							rc = queue_work(work_queue,
+								(struct work_struct *)node->queued_job);
+							printk("putting job %d on hpq.\n", node->pid);
+							if(rc) {
+								atomic_inc(&queue_size);
+								rc = 0;
+							} else {
+								rc = -1;
+							}
+						} else {
+							node->priority = 1;
+							((qwork *)node->queued_job)->priority = 1;
+							rc = queue_work(priority_work_queue,
+								(struct work_struct *)node->queued_job);
+							printk("putting job %d on q.\n", node->pid);
+							if(rc) {
+								atomic_inc(&priority_queue_size);
+								rc = 0;
+							} else {
+								rc = -1;
+							}
+						}
+					}
+					rc = 0;
+				} else {
+					pr_err("Could Not Swap Priority for Job with ID = %d.\n",
+						job_id);
 					rc = -1;
 				}
 			}
@@ -510,10 +567,10 @@ static int __init init_sys_submitjob(void)
 	if (sysptr == NULL)
 		sysptr = submitjob;
 	if (work_queue == NULL) {
-		work_queue = alloc_workqueue("jobs_queue", 0, 5);
+		work_queue = alloc_workqueue("jobs_queue", 0, 1);
 	}
 	if (priority_work_queue == NULL) {
-		priority_work_queue = alloc_workqueue("priority_jobs_queue", WQ_HIGHPRI, 5);
+		priority_work_queue = alloc_workqueue("priority_jobs_queue", WQ_HIGHPRI, 1);
 	}
 
 	atomic_set(&queue_size, 0);

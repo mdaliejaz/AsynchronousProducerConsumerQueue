@@ -6,6 +6,7 @@
 #define CONCAT 6
 #define LIST_JOB 7
 #define REMOVE_JOB 8
+#define SWAP_JOB_PRIORITY 9
 
 #define MAX_FILE_NAME_LENGTH 255
 #define AES_BLOCK_SIZE 16
