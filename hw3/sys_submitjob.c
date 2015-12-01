@@ -161,7 +161,8 @@ void submit_work_func(struct work_struct *work) {
 
 	nl_send_msg(in_work->pid, "hello world");
 
-	kfree(work);
+	if(in_work->is_cancelling == 0)
+		kfree(work);
 	return;
 }
 
@@ -334,6 +335,7 @@ asmlinkage long submitjob(void *arg)
 			node = list_entry(pos, job_list, list);
 			if(job_id == node->id) {
 				printk("deleting id = %d\n", node->id);
+				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
 				if(node->priority)
 					atomic_dec(&priority_queue_size);
@@ -426,6 +428,7 @@ asmlinkage long submitjob(void *arg)
 			node = list_entry(pos, job_list, list);
 			if(job_id == node->id) {
 				pr_debug("deleting id = %d\n", node->id);
+				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
 				if(node->priority)
 					atomic_dec(&priority_queue_size);
@@ -436,6 +439,7 @@ asmlinkage long submitjob(void *arg)
 						if(node->priority) {
 							node->priority = 0;
 							((qwork *)node->queued_job)->priority = 0;
+							((qwork *)node->queued_job)->is_cancelling = 0;
 							rc = queue_work(work_queue,
 								(struct work_struct *)node->queued_job);
 							printk("putting job %d on hpq.\n", node->pid);
@@ -448,6 +452,7 @@ asmlinkage long submitjob(void *arg)
 						} else {
 							node->priority = 1;
 							((qwork *)node->queued_job)->priority = 1;
+							((qwork *)node->queued_job)->is_cancelling = 0;
 							rc = queue_work(priority_work_queue,
 								(struct work_struct *)node->queued_job);
 							printk("putting job %d on q.\n", node->pid);
@@ -491,6 +496,7 @@ asmlinkage long submitjob(void *arg)
 		in_work->task = job->work;
 		in_work->pid = job->pid;
 		in_work->priority = job->priority;
+		in_work->is_cancelling = 0;
 		node->id = in_work->id;
 		node->type = in_work->type;
 		node->pid = in_work->pid;

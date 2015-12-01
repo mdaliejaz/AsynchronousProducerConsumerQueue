@@ -26,6 +26,7 @@ typedef struct queue_work {
 	int id;
 	int pid;
 	int priority;
+	int is_cancelling;
 	void *task;
 } qwork;
 
