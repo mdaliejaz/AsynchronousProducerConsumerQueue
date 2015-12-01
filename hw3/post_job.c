@@ -309,6 +309,28 @@ int main(int argc, char *argv[])
 		free(job_list);
 	}
 
+	if(type == REMOVE_JOB) {
+		if(errno == 22)
+			printf("Could not find Job %d! "
+				"The Job might have already been scheduled.\n",job_id);
+		else if(rc)
+			printf("Removal of Job %d Failed! "
+				"The Job might have already been scheduled.\n",job_id);
+		else
+			printf("Removal of Job %d was Successful!\n", job_id);
+	}
+
+	if(type == SWAP_JOB_PRIORITY) {
+		if(rc == -22)
+			printf("Could not find Job %d! "
+				"The Job might have already been scheduled.\n",job_id);
+		else if(rc)
+			printf("Swapping Priority of Job %d Failed! "
+				"The Job might have already been scheduled.\n", job_id);
+		else
+			printf("Swapping Priority of Job %d was Successful!\n", job_id);
+	}
+
 	out:
 	exit(rc);
 }

@@ -169,7 +169,7 @@ void submit_work_func(struct work_struct *work) {
 asmlinkage long submitjob(void *arg)
 {
 	long rc = 0;
-	int job_id, i;
+	int job_id, i, job_found = 0;
 	char return_job_list[200] = {0}, job_detail[20];
 	submit_job *job;
 	xcrypt *xcrypt_work = NULL;
@@ -334,7 +334,7 @@ asmlinkage long submitjob(void *arg)
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
 			if(job_id == node->id) {
-				printk("deleting id = %d\n", node->id);
+				job_found = 1;
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
 				if(node->priority)
@@ -416,6 +416,8 @@ asmlinkage long submitjob(void *arg)
 				}
 			}
 		}
+		if(!job_found)
+			rc = -22;
 		spin_unlock(&list_lock);
 		pr_debug("free job\n");
 		goto free_job;
@@ -427,6 +429,7 @@ asmlinkage long submitjob(void *arg)
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
 			if(job_id == node->id) {
+				job_found = 1;
 				pr_debug("deleting id = %d\n", node->id);
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
@@ -472,6 +475,8 @@ asmlinkage long submitjob(void *arg)
 				}
 			}
 		}
+		if(!job_found)
+			rc = -22;
 		spin_unlock(&list_lock);
 		pr_debug("free job\n");
 		goto free_job;
