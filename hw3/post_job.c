@@ -195,6 +195,7 @@ int main(int argc, char *argv[])
 		}
 
 		wait = 1;
+		priority = 1;
 
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
