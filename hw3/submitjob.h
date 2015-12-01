@@ -11,6 +11,8 @@
 #define MAX_FILE_NAME_LENGTH 255
 #define AES_BLOCK_SIZE 16
 
+#define NETLINK_USER 31
+
 //struct to submit jobs on queue
 typedef struct submit_job {
 	int pid;

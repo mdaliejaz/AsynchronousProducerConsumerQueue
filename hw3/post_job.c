@@ -27,24 +27,80 @@ int main(int argc, char *argv[])
 	checksum checksum_work;
 	concat concat_work;
 
-	opt = getopt(argc, argv, "t:a:p:i:wPh");
+	opt = getopt(argc, argv, "edsrcmluta:p:i:wPh");
 	while (opt != -1) {
 		switch (opt) {
+		case 'e':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = ENCRYPT;
+			break;
+		case 'd':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = DECRYPT;
+			break;
+		case 's':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = COMPRESS;
+			break;
+		case 'r':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = DEFLATE;
+			break;
+		case 'c':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = CHECKSUM;
+			break;
+		case 'm':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = CONCAT;
+			break;
+		case 'l':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = LIST_JOB;
+			break;
+		case 'u':
+			if (t_found) {
+				fprintf(stderr, "Type of command can be specified only "
+						"once\n");
+			}
+			t_found = 1;
+			type = REMOVE_JOB;
+			break;
 		case 't':
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
 			}
 			t_found = 1;
-			if(!strcmp(optarg,"ENCRYPT")) {
-				type = ENCRYPT;
-			}
-			else if(!strcmp(optarg,"DECRYPT")) {
-				type = DECRYPT;
-			}
-			else {
-				type = *optarg - '0';
-			}
+			type = SWAP_JOB_PRIORITY;
 			break;
 		case 'a':
 			if (a_found) {
@@ -77,17 +133,13 @@ int main(int argc, char *argv[])
 					"only one job at a time!\n");
 			}
 			i_found = 1;
-
 			job_id = strtol(optarg, &junk, 10);
-			printf("ID = %d\n", job_id);
 			break;
 		case 'w':
 			wait = 1;
-			printf("Wait flag on!");
 			break;
 		case 'P':
 			priority = 1;
-			printf("Priority job = %d\n", type);
 			break;
 		case 'h':
 			printf("./post_job: UNIMPLEMENTED.\n");
@@ -96,7 +148,7 @@ int main(int argc, char *argv[])
 			printf("./post_job: Try './post_job -h' for more information.\n");
 			return -1;
 		}
-		opt = getopt(argc, argv, "t:a:p:i:wPh");
+		opt = getopt(argc, argv, "edsrcmluta:p:i:wPh");
 	}
 
 	// add type check validation
@@ -308,7 +360,8 @@ int main(int argc, char *argv[])
 
 	if(wait == 1) {
 		receive_from_kernel(pid);
-	} else
+	} else if (type != LIST_JOB && type != REMOVE_JOB &&
+		type != SWAP_JOB_PRIORITY)
 		printf("The Job requested will have PID = %d.\n"
 			"The process will be run in the background. "
 			"Once finished, proper message will be put in dmesg!\n", pid);

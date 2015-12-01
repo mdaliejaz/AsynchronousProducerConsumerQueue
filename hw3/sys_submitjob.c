@@ -9,8 +9,6 @@
 #include <linux/skbuff.h>
 #include "jobs.h"
 
-#define NETLINK_USER 31
-
 DEFINE_SPINLOCK(list_lock);
 
 asmlinkage extern long (*sysptr)(void *arg);
