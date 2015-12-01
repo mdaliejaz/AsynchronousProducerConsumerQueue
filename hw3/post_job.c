@@ -290,8 +290,8 @@ int main(int argc, char *argv[])
 
 	if(wait)
 		rc = nl_bind(pid);
-
 	if(rc) {
+		printf("Netlink binding Failed!\n");
 		goto out;
 	}
 
@@ -308,7 +308,9 @@ int main(int argc, char *argv[])
 	if(wait == 1) {
 		receive_from_kernel(pid);
 	} else
-		printf("Not waiting!\n");
+		printf("The Job requested will have PID = %d.\n"
+			"The process will be run in the background. "
+			"Once finished, proper message will be put in dmesg!\n", pid);
 
 	if(type == CONCAT) {
 		for(i = 0; i < concat_work.infile_count; i++) {

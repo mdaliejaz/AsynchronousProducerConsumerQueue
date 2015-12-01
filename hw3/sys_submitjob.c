@@ -75,8 +75,8 @@ static void nl_send_msg(int pid, char *msg)
 }
 
 void submit_work_func(struct work_struct *work) {
-	int rc = 0, i, wait = 0;
-	char *checksum_result = NULL;
+	int rc = 0, i, wait = 0, pid;
+	char *checksum_result = NULL, msg[100] = {0}, post_msg[500] = {0};
 	qwork *in_work = (qwork *)work;
 	struct list_head *pos, *q;
 	job_list *node = NULL;
@@ -86,6 +86,12 @@ void submit_work_func(struct work_struct *work) {
 	case ENCRYPT:
 	case DECRYPT:
 		rc = do_xcrypt((xcrypt *)in_work->task);
+		if(rc)
+			sprintf(msg, "En/Decryption of %s Failed! Return Code = %d.\n",
+				((xcrypt *)in_work->task)->infile, rc);
+		else
+			sprintf(msg, "En/Decryption of %s went successful!\n",
+				((xcrypt *)in_work->task)->infile);
 		if(((xcrypt *)in_work->task)->infile)
 			kfree(((xcrypt *)in_work->task)->infile);
 		if(((xcrypt *)in_work->task)->outfile)
@@ -100,6 +106,12 @@ void submit_work_func(struct work_struct *work) {
 	case COMPRESS:
 	case DEFLATE:
 		rc = do_xpress((xpress *)in_work->task);
+		if(rc)
+			sprintf(msg, "De/Compression of %s Failed! Return Code = %d.\n",
+				((xpress *)in_work->task)->infile, rc);
+		else
+			sprintf(msg, "De/Compression of %s went successful!\n",
+				((xpress *)in_work->task)->infile);
 		if(((xpress *)in_work->task)->infile)
 			kfree(((xpress *)in_work->task)->infile);
 		if(((xpress *)in_work->task)->outfile)
@@ -117,7 +129,13 @@ void submit_work_func(struct work_struct *work) {
 			goto free_checksum_data;
 		}
 		rc = do_checksum((checksum *)in_work->task, checksum_result);
-		printk("checksum_result = %s\n", checksum_result);
+		if(rc)
+			sprintf(msg, "Checksum computation of %s Failed! Return Code = %d.\n",
+				((checksum *)in_work->task)->infile, rc);
+		else
+			sprintf(msg, "Checksum for %s computed: %s.\n",
+				((checksum *)in_work->task)->infile, checksum_result);
+		// printk("checksum_result = %s\n", checksum_result);
 		if(checksum_result != NULL)
 			kfree(checksum_result);
 	free_checksum_data:
@@ -128,6 +146,12 @@ void submit_work_func(struct work_struct *work) {
 		break;
 	case CONCAT:
 		rc = do_concat((concat *)in_work->task);
+		if(rc)
+			sprintf(msg, "Concatenation of %d files Failed! Return Code = %d.\n",
+				((concat *)in_work->task)->infile_count, rc);
+		else
+			sprintf(msg, "Concatenated %d files successfully!\n",
+				((concat *)in_work->task)->infile_count);
 		if(((concat *)in_work->task)->outfile != NULL)
 			kfree(((concat *)in_work->task)->outfile);
 		for(i = 0; i < ((concat *)in_work->task)->infile_count; i++) {
@@ -154,7 +178,9 @@ void submit_work_func(struct work_struct *work) {
 		if(node->id == in_work->id) {
 			printk("deleting id = %d\n", node->id);
 			printk("node->wait = %d\n", node->wait);
+			pid = node->pid;
 			wait = node->wait;
+			sprintf(post_msg, "Job %d(PID = %d): %s", node->id, node->pid, msg);
 			list_del(pos);
 			kfree(node);
 		}
@@ -163,7 +189,7 @@ void submit_work_func(struct work_struct *work) {
 
 	printk("wait = %d\n", wait);
 	if(wait == 1)
-		nl_send_msg(in_work->pid, "hello world");
+		nl_send_msg(in_work->pid, post_msg);
 
 	if(in_work->is_cancelling == 0)
 		kfree(work);
