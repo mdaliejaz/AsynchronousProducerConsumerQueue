@@ -15,7 +15,7 @@
 
 int main(int argc, char *argv[])
 {
-	int rc = 0, pid, i, j, priority = 0;
+	int rc = 0, pid, i, j, priority = 0, wait = 0;
 	submit_job job;
 	char opt, *algo, *password, *res, *job_list, *junk;
 	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 	checksum checksum_work;
 	concat concat_work;
 
-	opt = getopt(argc, argv, "t:a:p:i:Ph");
+	opt = getopt(argc, argv, "t:a:p:i:wPh");
 	while (opt != -1) {
 		switch (opt) {
 		case 't':
@@ -81,6 +81,10 @@ int main(int argc, char *argv[])
 			job_id = strtol(optarg, &junk, 10);
 			printf("ID = %d\n", job_id);
 			break;
+		case 'w':
+			wait = 1;
+			printf("Wait flag on!");
+			break;
 		case 'P':
 			priority = 1;
 			printf("Priority job = %d\n", type);
@@ -92,7 +96,7 @@ int main(int argc, char *argv[])
 			printf("./post_job: Try './post_job -h' for more information.\n");
 			return -1;
 		}
-		opt = getopt(argc, argv, "t:a:p:i:Ph");
+		opt = getopt(argc, argv, "t:a:p:i:wPh");
 	}
 
 	// add type check validation
@@ -190,6 +194,8 @@ int main(int argc, char *argv[])
 			return -1;
 		}
 
+		wait = 1;
+
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
 			checksum_work.infile =  in_realpath + '\0';
@@ -278,7 +284,13 @@ int main(int argc, char *argv[])
 	job.priority = priority;
 	pid = getpid();
 	job.pid = pid;
-	// rc = nl_bind(pid);
+	printf("wait  = %d\n", wait);
+	job.wait = wait;
+	printf("job.wait  = %d\n", job.wait);
+
+	if(wait)
+		rc = nl_bind(pid);
+
 	if(rc) {
 		goto out;
 	}
@@ -293,7 +305,10 @@ int main(int argc, char *argv[])
 	else
 		printf("syscall returned %d (errno=%d)\n", rc, errno);
 
-	// receive_from_kernel(pid);
+	if(wait == 1) {
+		receive_from_kernel(pid);
+	} else
+		printf("Not waiting!\n");
 
 	if(type == CONCAT) {
 		for(i = 0; i < concat_work.infile_count; i++) {

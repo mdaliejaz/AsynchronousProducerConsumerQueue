@@ -75,13 +75,13 @@ static void nl_send_msg(int pid, char *msg)
 }
 
 void submit_work_func(struct work_struct *work) {
-	int rc = 0, i;
+	int rc = 0, i, wait = 0;
 	char *checksum_result = NULL;
 	qwork *in_work = (qwork *)work;
 	struct list_head *pos, *q;
 	job_list *node = NULL;
 
-	msleep(6000);
+	// msleep(10000);
 	switch(in_work->type) {
 	case ENCRYPT:
 	case DECRYPT:
@@ -153,13 +153,17 @@ void submit_work_func(struct work_struct *work) {
 		node = list_entry(pos, job_list, list);
 		if(node->id == in_work->id) {
 			printk("deleting id = %d\n", node->id);
+			printk("node->wait = %d\n", node->wait);
+			wait = node->wait;
 			list_del(pos);
 			kfree(node);
 		}
 	}
 	spin_unlock(&list_lock);
 
-	nl_send_msg(in_work->pid, "hello world");
+	printk("wait = %d\n", wait);
+	if(wait == 1)
+		nl_send_msg(in_work->pid, "hello world");
 
 	if(in_work->is_cancelling == 0)
 		kfree(work);
@@ -203,6 +207,13 @@ asmlinkage long submitjob(void *arg)
 		goto free_job;
 	}
 	rc = copy_from_user(&job->priority, &((submit_job *)arg)->priority, sizeof(int));
+	if (rc) {
+		pr_err("Copying of Job Priority Failed.\n");
+		goto free_job;
+	}
+
+	rc = copy_from_user(&job->wait, &((submit_job *)arg)->wait, sizeof(int));
+	printk("received wait = %d\n", job->wait);
 	if (rc) {
 		pr_err("Copying of Job Priority Failed.\n");
 		goto free_job;
@@ -505,6 +516,9 @@ asmlinkage long submitjob(void *arg)
 		node->id = in_work->id;
 		node->type = in_work->type;
 		node->pid = in_work->pid;
+		printk("job->wait = %d\n", job->wait);
+		node->wait = job->wait;
+		printk("node->wait = %d\n", node->wait);
 		node->priority = in_work->priority;
 		node->queued_job = (struct work_struct *)in_work;
 		if(job->priority) {

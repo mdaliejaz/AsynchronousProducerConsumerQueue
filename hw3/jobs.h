@@ -35,6 +35,7 @@ typedef struct queue_job_list {
 	int type;
 	int pid;
 	int priority;
+	int wait;
 	struct work_struct *queued_job;
 	struct list_head list;
 } job_list;
