@@ -23,6 +23,13 @@ int validate_user_checksum_args(checksum *user_param)
 		return -EINVAL;
 	}
 
+	if(user_param->algo == NULL || IS_ERR(user_param->algo) ||
+		unlikely(!access_ok(VERIFY_READ, user_param->algo,
+			sizeof(user_param->algo)))) {
+		pr_err("user parameters are not valid!\n");
+		return -EINVAL;
+	}
+
 	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH)) {
 		return -ENAMETOOLONG;
 	}
@@ -44,13 +51,26 @@ int copy_checksum_data_to_kernel(checksum *user_param, checksum *kernel_param)
 		printk("Copying of input file failed.\n");
 		goto free_infile;
 	}
+	kernel_param->algo = kzalloc(strlen(user_param->algo) + 1, GFP_KERNEL);
+	if (!kernel_param->algo) {
+		rc = -ENOMEM;
+		goto free_infile;
+	}
+	rc = copy_from_user(kernel_param->algo, user_param->algo,
+		strlen(user_param->algo));
+	if (rc) {
+		printk("Copying of input algorithm failed.\n");
+		goto free_algo;
+	}
 
 	return 0;
 
-	free_infile:
-		kfree(kernel_param->infile);
-	out:
-		return rc;
+free_infile:
+	kfree(kernel_param->infile);
+free_algo:
+	kfree(kernel_param->algo);
+out:
+	return rc;
 }
 
 int do_checksum(checksum *checksum_obj, char *checksum_result) {
@@ -79,7 +99,7 @@ int do_checksum(checksum *checksum_obj, char *checksum_result) {
     infilp->f_pos = 0;		/* start offset */
 
 	mutex_lock(&checksum_mutex);
-	md5 = crypto_alloc_shash("md5", 0, 0);
+	md5 = crypto_alloc_shash(checksum_obj->algo, 0, 0);
 	if (md5 == NULL || IS_ERR(md5)) {
 		rc = PTR_ERR(md5);
 		goto close_infilp;

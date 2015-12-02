@@ -43,6 +43,7 @@ typedef struct compress_decompress_struct {
 //struct for checksum
 typedef struct checksum_struct {
 	char *infile;				// input filename
+	char *algo;					// checksum algorithm used
 } checksum;
 
 //struct for file concatenation

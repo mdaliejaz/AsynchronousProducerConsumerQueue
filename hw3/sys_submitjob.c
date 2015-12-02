@@ -188,6 +188,7 @@ void submit_work_func(struct work_struct *work) {
 	printk("wait = %d\n", wait);
 	if(wait == 1)
 		nl_send_msg(in_work->pid, post_msg);
+	pr_info("%s", post_msg);
 
 	if(in_work->is_cancelling == 0)
 		kfree(work);
@@ -377,6 +378,7 @@ asmlinkage long submitjob(void *arg)
 				else
 					atomic_dec(&queue_size);
 				if(rc) {
+					pr_info("Successfully Deleted Job %d.\n", job_id);
 					if(node != NULL)
 						in_work = (qwork *)node->queued_job;
 					switch(in_work->type) {
@@ -411,8 +413,15 @@ asmlinkage long submitjob(void *arg)
 						}
 						break;
 					case CHECKSUM:
-						if((checksum *)in_work->task != NULL)
-							kfree((checksum *)in_work->task);
+						if((checksum *)in_work->task != NULL) {
+							if(((checksum *)in_work->task)->infile != NULL)
+								kfree(((checksum *)in_work->task)->infile);
+							if(((checksum *)in_work->task)->algo != NULL)
+								kfree(((checksum *)in_work->task)->algo);
+							// Check again to avoid race condition
+							if((checksum *)in_work->task != NULL)
+								kfree((checksum *)in_work->task);
+						}
 						break;
 					case CONCAT:
 						if((concat *)in_work->task) {
@@ -434,27 +443,26 @@ asmlinkage long submitjob(void *arg)
 						pr_err("Unrecognised Option.\n");
 					}
 
-					if(node->queued_job != NULL) {
+					if(node->queued_job != NULL)
 						kfree(node->queued_job);
-					}
 
-					pr_debug("removed from queue.\n");
 					list_del(pos);
-					pr_debug("list_del.\n");
-					kfree(node);
-					pr_debug("free node\n");
+					if (node)
+						kfree(node);
 					rc = 0;
 				} else {
-					pr_err("Could Not Delete Job with ID = %d.\n",
-						job_id);
+					pr_err("Failed to Delete Job %d. Job might have already "
+						"been scheduled\n", job_id);
 					rc = -1;
 				}
 			}
 		}
-		if(!job_found)
+		if(!job_found) {
+			pr_err("Failed to Delete Job %d. Could not find it in any queue. "
+						"The Job might have already been scheduled\n", job_id);
 			rc = -22;
+		}
 		spin_unlock(&list_lock);
-		pr_debug("free job\n");
 		goto free_job;
 		break;
 	case SWAP_JOB_PRIORITY:
@@ -465,7 +473,6 @@ asmlinkage long submitjob(void *arg)
 			node = list_entry(pos, job_list, list);
 			if(job_id == node->id) {
 				job_found = 1;
-				pr_debug("deleting id = %d\n", node->id);
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
 				if(node->priority)
@@ -473,6 +480,7 @@ asmlinkage long submitjob(void *arg)
 				else
 					atomic_dec(&queue_size);
 				if(rc) {
+					pr_info("Successfully Deleted Job %d.\n", job_id);
 					if(node != NULL) {
 						if(node->priority) {
 							node->priority = 0;
@@ -480,7 +488,8 @@ asmlinkage long submitjob(void *arg)
 							((qwork *)node->queued_job)->is_cancelling = 0;
 							rc = queue_work(work_queue,
 								(struct work_struct *)node->queued_job);
-							printk("putting job %d on hpq.\n", node->pid);
+							pr_info("Putting Job %d on high priority queue.\n",
+								node->pid);
 							if(rc) {
 								atomic_inc(&queue_size);
 								rc = 0;
@@ -493,7 +502,8 @@ asmlinkage long submitjob(void *arg)
 							((qwork *)node->queued_job)->is_cancelling = 0;
 							rc = queue_work(priority_work_queue,
 								(struct work_struct *)node->queued_job);
-							printk("putting job %d on q.\n", node->pid);
+							pr_info("Putting Job %d on normal priority queue.\n",
+								node->pid);
 							if(rc) {
 								atomic_inc(&priority_queue_size);
 								rc = 0;
@@ -540,14 +550,14 @@ asmlinkage long submitjob(void *arg)
 		node->id = in_work->id;
 		node->type = in_work->type;
 		node->pid = in_work->pid;
-		printk("job->wait = %d\n", job->wait);
+		// printk("job->wait = %d\n", job->wait);
 		node->wait = job->wait;
-		printk("node->wait = %d\n", node->wait);
+		// printk("node->wait = %d\n", node->wait);
 		node->priority = in_work->priority;
 		node->queued_job = (struct work_struct *)in_work;
 		if(job->priority) {
 			rc = queue_work(priority_work_queue, (struct work_struct *)in_work);
-			printk("putting job %d on hpq.\n", job->pid);
+			pr_info("Putting Job %d on high priority queue.\n", job->pid);
 			if (rc) {
 				atomic_inc(&priority_queue_size);
 				rc = 0;
@@ -557,7 +567,7 @@ asmlinkage long submitjob(void *arg)
 			}
 		} else {
 			rc = queue_work(work_queue, (struct work_struct *)in_work);
-			printk("putting job %d on q.\n", job->pid);
+			pr_info("Putting Job %d on normal priority queue.\n", job->pid);
 			if(rc) {
 				atomic_inc(&queue_size);
 				rc = 0;

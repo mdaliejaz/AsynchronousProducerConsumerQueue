@@ -159,6 +159,10 @@ int main(int argc, char *argv[])
 			return -1;
 		}
 
+		if (a_found == 0){
+			algo = "aes";
+		}
+
 		if (optind + 2 != argc) {
 			fprintf(stderr, "%d = Insufficient number of arguments.\n",
 				optind);
@@ -175,7 +179,7 @@ int main(int argc, char *argv[])
 		}
 
 		res = realpath(argv[optind + 1], out_realpath);
-		// No error check as the file might not exist
+		// No error check as the output file might not exist
 		xcrypt_work.outfile =  out_realpath + '\0';
 
 		xcrypt_work.cipher = algo + '\0';
@@ -201,6 +205,10 @@ int main(int argc, char *argv[])
 		// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
 		// printf("0. flags = %d\n", ((xcrypt *)job.work)->flag);
 	} else if (type == COMPRESS || type == DEFLATE) {
+		if (a_found == 0){
+			algo = "deflate";
+		}
+
 		if (optind + 2 != argc) {
 			fprintf(stderr, "%d = Insufficient number of arguments.\n",
 				optind);
@@ -217,7 +225,7 @@ int main(int argc, char *argv[])
 		}
 
 		res = realpath(argv[optind + 1], out_realpath);
-		// No error check as the file might not exist
+		// No error check as the output file might not exist
 		xpress_work.outfile =  out_realpath + '\0';
 
 		xpress_work.algo = algo + '\0';
@@ -234,18 +242,20 @@ int main(int argc, char *argv[])
 				"limit.\n");
 			return -1;
 		}
-		printf("0. Type = %d\n", job.type);
-		printf("0. algo = %s\n", ((xpress *)job.work)->algo);
-		printf("0. infile = %s\n", ((xpress *)job.work)->infile);
-		printf("0. outfile = %s\n", ((xpress *)job.work)->outfile);
-		printf("0. flags = %d\n", ((xpress *)job.work)->flag);
+		// printf("0. Type = %d\n", job.type);
+		// printf("0. algo = %s\n", ((xpress *)job.work)->algo);
+		// printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+		// printf("0. outfile = %s\n", ((xpress *)job.work)->outfile);
+		// printf("0. flags = %d\n", ((xpress *)job.work)->flag);
 	} else if (type == CHECKSUM) {
+		if (a_found == 0){
+			algo = "md5";
+		}
 		if (optind + 1 != argc) {
 			fprintf(stderr, "%d = Insufficient number of arguments.\n",
 				optind);
 			return -1;
 		}
-
 		wait = 1;
 		priority = 1;
 
@@ -257,6 +267,8 @@ int main(int argc, char *argv[])
 			perror("realpath");
 			return -1;
 		}
+		checksum_work.algo = algo + '\0';
+
 		job.type = type;
 		job.work = &checksum_work;
 
@@ -266,8 +278,8 @@ int main(int argc, char *argv[])
 				"limit.\n");
 			return -1;
 		}
-		printf("0. Type = %d\n", job.type);
-		printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+		// printf("0. Type = %d\n", job.type);
+		// printf("0. infile = %s\n", ((xpress *)job.work)->infile);
 	} else if (type == CONCAT) {
 		if (!(optind + 2 <= argc)) {
 			fprintf(stderr, "%d = Insufficient number of arguments.\n",
@@ -277,12 +289,8 @@ int main(int argc, char *argv[])
 
 		concat_work.infile_count = argc - optind - 1;
 
-		res = realpath(argv[optind], out_realpath);
-		concat_work.outfile =  out_realpath + '\0';
-
 		concat_work.infiles = malloc(sizeof(char *) * concat_work.infile_count);
-
-		for(i = optind + 1, j = 0; i < argc; i++, j++) {
+		for(i = optind, j = 0; i < argc - 1; i++, j++) {
 			res = realpath(argv[i], in_realpath);
 			if (res) {
 				concat_work.infiles[j] = (char *)malloc(strlen(in_realpath) + 1);
@@ -302,16 +310,18 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 		}
+		res = realpath(argv[argc - 1], out_realpath);
+		concat_work.outfile =  out_realpath + '\0';
 
 		job.type = type;
 		job.work = &concat_work;
 
-		printf("0. Type = %d\n", job.type);
-		printf("0. outfile = %s\n", ((concat *)job.work)->outfile);
-		printf("0. infile count = %d\n", ((concat *)job.work)->infile_count);
-		for(i = 0; i < concat_work.infile_count; i++) {
-			printf("0. infile[%d] = %s\n", i, ((concat *)job.work)->infiles[i]);
-		}
+		// printf("0. Type = %d\n", job.type);
+		// printf("0. outfile = %s\n", ((concat *)job.work)->outfile);
+		// printf("0. infile count = %d\n", ((concat *)job.work)->infile_count);
+		// for(i = 0; i < concat_work.infile_count; i++) {
+		// 	printf("0. infile[%d] = %s\n", i, ((concat *)job.work)->infiles[i]);
+		// }
 	} else if (type == LIST_JOB) {
 		job.type = type;
 		job_list = (char *)malloc(sizeof(int) * 100);
@@ -323,7 +333,7 @@ int main(int argc, char *argv[])
 		}
 		job.type = type;
 		job.work = &job_id;
-		printf("removing ID = %d\n", job_id);
+		// printf("removing ID = %d\n", job_id);
 	} else if (type == SWAP_JOB_PRIORITY) {
 		if (!i_found) {
 			fprintf(stderr, "You must specify the Job ID of the process to be deleted.\n");
@@ -331,26 +341,26 @@ int main(int argc, char *argv[])
 		}
 		job.type = type;
 		job.work = &job_id;
-		printf("swap priority ID = %d\n", job_id);
+		// printf("swap priority ID = %d\n", job_id);
 	}
 
 	job.priority = priority;
 	pid = getpid();
 	job.pid = pid;
-	printf("wait  = %d\n", wait);
+	// printf("wait  = %d\n", wait);
 	job.wait = wait;
-	printf("job.wait  = %d\n", job.wait);
+	// printf("job.wait  = %d\n", job.wait);
 
 	if(wait)
 		rc = nl_bind(pid);
 	if(rc) {
-		printf("Netlink binding Failed!\n");
+		fprintf(stderr, "Netlink binding Failed!\n");
 		goto out;
 	}
 
-	printf("pid = %d\n", pid);
+	// printf("pid = %d\n", pid);
 
-	printf("type = %d\n", job.type);
+	// printf("type = %d\n", job.type);
 
 	rc = syscall(__NR_submitjob, (void *) &job);
 	if (rc == 0)
