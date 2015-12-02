@@ -85,7 +85,7 @@ void submit_work_func(struct work_struct *work) {
 	case DECRYPT:
 		rc = do_xcrypt((xcrypt *)in_work->task);
 		if(rc)
-			sprintf(msg, "En/Decryption of %s Failed! Return Code = %d.\n",
+			sprintf(msg, "En/Decryption of %s Failed! (Return Code = %d)\n",
 				((xcrypt *)in_work->task)->infile, rc);
 		else
 			sprintf(msg, "En/Decryption of %s went successful!\n",
@@ -105,7 +105,7 @@ void submit_work_func(struct work_struct *work) {
 	case DECOMPRESS:
 		rc = do_xpress((xpress *)in_work->task);
 		if(rc)
-			sprintf(msg, "De/Compression of %s Failed! Return Code = %d.\n",
+			sprintf(msg, "De/Compression of %s Failed! (Return Code = %d)\n",
 				((xpress *)in_work->task)->infile, rc);
 		else
 			sprintf(msg, "De/Compression of %s went successful!\n",
@@ -128,7 +128,7 @@ void submit_work_func(struct work_struct *work) {
 		}
 		rc = do_checksum((checksum *)in_work->task, checksum_result);
 		if(rc)
-			sprintf(msg, "Checksum computation of %s Failed! Return Code = %d.\n",
+			sprintf(msg, "Checksum computation of %s Failed! (Return Code = %d)\n",
 				((checksum *)in_work->task)->infile, rc);
 		else
 			sprintf(msg, "Checksum for %s computed: %s.\n",
@@ -145,7 +145,7 @@ void submit_work_func(struct work_struct *work) {
 	case CONCAT:
 		rc = do_concat((concat *)in_work->task);
 		if(rc)
-			sprintf(msg, "Concatenation of %d files Failed! Return Code = %d.\n",
+			sprintf(msg, "Concatenation of %d files Failed! (Return Code = %d)\n",
 				((concat *)in_work->task)->infile_count, rc);
 		else
 			sprintf(msg, "Concatenated %d files successfully!\n",
@@ -624,10 +624,10 @@ static int __init init_sys_submitjob(void)
 	if (sysptr == NULL)
 		sysptr = submitjob;
 	if (work_queue == NULL) {
-		work_queue = alloc_workqueue("jobs_queue", 0, 1);
+		work_queue = alloc_workqueue("jobs_queue", 0, 5);
 	}
 	if (priority_work_queue == NULL) {
-		priority_work_queue = alloc_workqueue("priority_jobs_queue", WQ_HIGHPRI, 1);
+		priority_work_queue = alloc_workqueue("priority_jobs_queue", WQ_HIGHPRI, 5);
 	}
 
 	atomic_set(&queue_size, 0);

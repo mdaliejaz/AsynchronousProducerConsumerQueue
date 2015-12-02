@@ -17,6 +17,7 @@ const u8 *aes_iv = (u8 *) CEPH_AES_IV;
 static DEFINE_MUTEX(md5_mutex);
 static DEFINE_MUTEX(encrypt_mutex);
 static DEFINE_MUTEX(decrypt_mutex);
+static DEFINE_MUTEX(flock_mutex);
 
 int validate_user_xcrypt_args(xcrypt *user_param)
 {
@@ -203,12 +204,12 @@ int getMD5Hash(char *str, u8 *md5_hash)
 	}
 	mutex_unlock(&md5_mutex);
 	/* ********* MD5_HASH generated ****** */
-	symlink_hash_err:
-		kfree(sdescmd5);
-	free_shash:
-		crypto_free_shash(md5);
-	out:
-		return rc;
+symlink_hash_err:
+	kfree(sdescmd5);
+free_shash:
+	crypto_free_shash(md5);
+out:
+	return rc;
 }
 
 int do_encryption(const char *algo, const void *key, int key_len,
@@ -318,12 +319,13 @@ int do_decryption(const char *algo, const void *key, int key_len,
 
 int do_xcrypt(xcrypt *xcrypt_obj)
 {
-	int rc = 0, out_exist = 0, to_pad, bytes, len = PAGE_SIZE;
-	int decrypt_pad_len = 32, encrypt_pad_len = 32;
+	int rc = 0, out_exist = 0, to_pad, bytes, len = PAGE_SIZE, sleep_time = 500;
+	int decrypt_pad_len = 32, encrypt_pad_len = 32, obtained_lock = 0;
 	char *read_buffer, *key_buffer, *write_buffer, *pad_buffer, pad_size[3];
 	char cipher_algo[16], preamble_hash_key[48], *decrypt_key_buffer;
 	char *tmpfilp_name = "jcryptoaa6b5d17e373744f14c07f71b22f9549.tmp";
-	struct file *infilp, *outfilp, *tmpfilp;
+	char infilp_lock_name[256], outfilp_lock_name[256];
+	struct file *infilp, *outfilp, *tmpfilp, *infilp_lock = NULL, *outfilp_lock = NULL;
 	struct inode *outfilp_inode = NULL, *tmpfilp_inode = NULL;
 	struct dentry *outfilp_dentry = NULL, *tmpfilp_dentry = NULL;
 	struct inode *del_inode;
@@ -339,8 +341,51 @@ int do_xcrypt(xcrypt *xcrypt_obj)
     sprintf(preamble_hash_key, "%s-%s", xcrypt_obj->keybuf,
     	xcrypt_obj->cipher);
 
-    printk("Remove me!\n");
-    msleep(10000);	// remove me
+    sprintf(infilp_lock_name, "%s.lock", xcrypt_obj->infile);
+    sprintf(outfilp_lock_name, "%s.lock", xcrypt_obj->outfile);
+
+	while(!obtained_lock) {
+		mutex_lock(&flock_mutex);
+		if(vfs_stat(infilp_lock_name, &stat) != 0) {
+			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
+			if(vfs_stat(outfilp_lock_name, &stat) != 0) {
+				outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
+				obtained_lock = 1;
+				printk("Obtained lock!\n");
+				mutex_unlock(&flock_mutex);
+			} else {
+				if (infilp_lock && !IS_ERR(infilp_lock)) {
+					if(infilp_lock->f_path.dentry != NULL &&
+						infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+						vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
+							infilp_lock->f_path.dentry, &del_inode);
+					}
+					infilp_lock = NULL;
+				}
+				mutex_unlock(&flock_mutex);
+				if(sleep_time > 10000) {
+					rc = -EBUSY;
+					pr_err("Couldn't get lock even after waiting for more "
+						"than 30 seconds! Exiting.\n");
+					goto out;
+				}
+				sleep_time = sleep_time * 2;
+				printk("sleeping for %d ms!\n", sleep_time);
+				msleep(sleep_time);
+			}
+		} else {
+			mutex_unlock(&flock_mutex);
+			if(sleep_time > 10000) {
+				rc = -EBUSY;
+				pr_err("Couldn't get lock even after waiting for more "
+					"than 30 seconds! Exiting.\n");
+				goto out;
+			}
+			sleep_time = sleep_time * 2;
+			printk("outer sleeping for %d ms!\n", sleep_time);
+			msleep(sleep_time);
+		}
+	}
 
 	md5_hash = kzalloc(AES_BLOCK_SIZE, GFP_KERNEL);
 	if (!md5_hash) {
@@ -527,43 +572,59 @@ int do_xcrypt(xcrypt *xcrypt_obj)
 		tmpfilp->f_path.dentry, outfilp->f_path.dentry->d_parent->d_inode,
 		outfilp->f_path.dentry, NULL, 0);
 
-	reset_fs:
-		set_fs(oldfs);
-	close_outfilp:
-		if(out_exist && rc < 0) {
-			vfs_unlink(outfilp->f_path.dentry->d_parent->d_inode,
-				outfilp->f_path.dentry, &del_inode);
-			outfilp = NULL;
+reset_fs:
+	set_fs(oldfs);
+close_outfilp:
+	if(out_exist && rc < 0) {
+		vfs_unlink(outfilp->f_path.dentry->d_parent->d_inode,
+			outfilp->f_path.dentry, &del_inode);
+		outfilp = NULL;
+	}
+	if (outfilp != NULL && !IS_ERR(outfilp)) {
+		filp_close(outfilp, NULL);
+	}
+close_tmpfilp:
+	if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
+		if(tmpfilp->f_path.dentry != NULL &&
+			tmpfilp->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(tmpfilp->f_path.dentry->d_parent->d_inode,
+				tmpfilp->f_path.dentry, &del_inode);
 		}
-		if (outfilp != NULL && !IS_ERR(outfilp)) {
-			filp_close(outfilp, NULL);
-		}
-	close_tmpfilp:
-		if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
-			if(tmpfilp->f_path.dentry != NULL &&
-				tmpfilp->f_path.dentry->d_parent->d_inode != NULL) {
-				vfs_unlink(tmpfilp->f_path.dentry->d_parent->d_inode,
-					tmpfilp->f_path.dentry, &del_inode);
-			}
-			tmpfilp = NULL;
-		}
-		if (tmpfilp != NULL && !IS_ERR(tmpfilp)) {
-			filp_close(tmpfilp, NULL);
-		}
-	close_infilp:
-		if (infilp && !IS_ERR(infilp))
-			filp_close(infilp, NULL);
+		tmpfilp = NULL;
+	}
+	if (tmpfilp != NULL && !IS_ERR(tmpfilp)) {
+		filp_close(tmpfilp, NULL);
+	}
+close_infilp:
+	if (infilp && !IS_ERR(infilp))
+		filp_close(infilp, NULL);
 	kfree(decrypt_key_buffer);
-	free_pad_buffer:
-		kfree(pad_buffer);
-	free_write_buffer:
-		kfree(write_buffer);
-	free_key_buffer:
-		kfree(key_buffer);
-	free_read_buffer:
-		kfree(read_buffer);
-	free_md5_hash:
-		kfree(md5_hash);
-	out:
-		return rc;
+free_pad_buffer:
+	kfree(pad_buffer);
+free_write_buffer:
+	kfree(write_buffer);
+free_key_buffer:
+	kfree(key_buffer);
+free_read_buffer:
+	kfree(read_buffer);
+free_md5_hash:
+	kfree(md5_hash);
+out:
+	if (infilp_lock && !IS_ERR(infilp_lock)) {
+		if(infilp_lock->f_path.dentry != NULL &&
+			infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
+				infilp_lock->f_path.dentry, &del_inode);
+		}
+		infilp_lock = NULL;
+	}
+	if (outfilp_lock && !IS_ERR(outfilp_lock)) {
+		if(outfilp_lock->f_path.dentry != NULL &&
+			outfilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(outfilp_lock->f_path.dentry->d_parent->d_inode,
+				outfilp_lock->f_path.dentry, &del_inode);
+		}
+		outfilp_lock = NULL;
+	}
+	return rc;
 }
