@@ -3,10 +3,12 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/delay.h>
 #include <crypto/hash.h>
 #include "jobs.h"
 
 static DEFINE_MUTEX(checksum_mutex);
+static DEFINE_MUTEX(flock_mutex);
 
 int validate_user_checksum_args(checksum *user_param)
 {
@@ -74,16 +76,43 @@ out:
 }
 
 int do_checksum(checksum *checksum_obj, char *checksum_result) {
-	int rc = 0, size, bytes, i;
-	char *read_buffer;
+	int rc = 0, size, bytes, i, obtained_lock = 0, sleep_time = 500;
+	char *read_buffer, infilp_lock_name[256];
 	struct shash_desc *sdescmd5;
 	struct crypto_shash *md5;
-	struct file *infilp;
+	struct file *infilp, *infilp_lock = NULL;
+	struct kstat stat;
+	struct inode *del_inode;
 	unsigned char pass_hash[MD5_DIGEST_LENGTH];
 	/*
 	 * This MD5_HASH generation algorithm is inspired by symlink_hash(...)
 	 * in http://lxr.fsl.cs.sunysb.edu/linux/source/fs/cifs/link.c#L57
 	*/
+
+
+	sprintf(infilp_lock_name, "%s.lock", checksum_obj->infile);
+
+	while(!obtained_lock) {
+		mutex_lock(&flock_mutex);
+		if(vfs_stat(infilp_lock_name, &stat) != 0) {
+			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
+			obtained_lock = 1;
+			printk("Obtained lock!\n");
+			mutex_unlock(&flock_mutex);
+		} else {
+			mutex_unlock(&flock_mutex);
+			if(sleep_time > 10000) {
+				rc = -EBUSY;
+				pr_err("Couldn't get lock even after waiting for more "
+					"than 30 seconds! Exiting.\n");
+				goto out;
+			}
+			sleep_time = sleep_time * 2;
+			printk("Cannot get lock on input file. Sleeping for %d "
+				"msec!\n", sleep_time);
+			msleep(sleep_time);
+		}
+	}
 
 	read_buffer = (char *)kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!read_buffer) {
@@ -140,15 +169,24 @@ int do_checksum(checksum *checksum_obj, char *checksum_result) {
 		sprintf(&checksum_result[i*2], "%02x", (unsigned int)pass_hash[i]);
 	}
 
-	symlink_hash_err:
-		kfree(sdescmd5);
-	free_shash:
-		crypto_free_shash(md5);
-	close_infilp:
-		if (infilp && !IS_ERR(infilp))
-			filp_close(infilp, NULL);
-	free_read_buffer:
-		kfree(read_buffer);
-	out:
-		return rc;
+symlink_hash_err:
+	kfree(sdescmd5);
+free_shash:
+	crypto_free_shash(md5);
+close_infilp:
+	if (infilp && !IS_ERR(infilp))
+		filp_close(infilp, NULL);
+free_read_buffer:
+	kfree(read_buffer);
+out:
+	if (infilp_lock && !IS_ERR(infilp_lock)) {
+		if(infilp_lock->f_path.dentry != NULL &&
+			infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
+				infilp_lock->f_path.dentry, &del_inode);
+		}
+		infilp_lock = NULL;
+	}
+
+	return rc;
 }

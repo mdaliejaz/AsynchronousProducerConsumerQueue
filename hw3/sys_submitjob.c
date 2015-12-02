@@ -181,7 +181,6 @@ void submit_work_func(struct work_struct *work) {
 	}
 	spin_unlock(&list_lock);
 
-	printk("wait = %d\n", wait);
 	if(wait == 1)
 		nl_send_msg(in_work->pid, post_msg);
 	pr_info("%s", post_msg);
@@ -234,7 +233,6 @@ asmlinkage long submitjob(void *arg)
 	}
 
 	rc = copy_from_user(&job->wait, &((submit_job *)arg)->wait, sizeof(int));
-	printk("received wait = %d\n", job->wait);
 	if (rc) {
 		pr_err("Copying of Job Priority Failed.\n");
 		goto free_job;
