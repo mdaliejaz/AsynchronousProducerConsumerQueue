@@ -102,7 +102,7 @@ void submit_work_func(struct work_struct *work) {
 			kfree((xcrypt *)in_work->task);
 		break;
 	case COMPRESS:
-	case DEFLATE:
+	case DECOMPRESS:
 		rc = do_xpress((xpress *)in_work->task);
 		if(rc)
 			sprintf(msg, "De/Compression of %s Failed! Return Code = %d.\n",
@@ -284,7 +284,7 @@ asmlinkage long submitjob(void *arg)
 		// printk("job->work->flag = %d\n", ((xcrypt *)job->work)->flag);
 		break;
 	case COMPRESS:
-	case DEFLATE:
+	case DECOMPRESS:
 		rc = validate_user_xpress_args((xpress *)((submit_job *)arg)->work);
 		xpress_work = (xpress *)kzalloc(sizeof(xpress), GFP_KERNEL);
 		if (!xpress_work) {
@@ -399,7 +399,7 @@ asmlinkage long submitjob(void *arg)
 						}
 						break;
 					case COMPRESS:
-					case DEFLATE:
+					case DECOMPRESS:
 						if((xpress *)in_work->task != NULL) {
 							if(((xpress *)in_work->task)->infile != NULL)
 								kfree(((xpress *)in_work->task)->infile);

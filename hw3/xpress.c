@@ -37,7 +37,7 @@ int validate_user_xpress_args(xpress *user_param)
 		return -EINVAL;
 	}
 
-	if(!(user_param->flag == COMPRESS || user_param->flag == DEFLATE)) {
+	if(!(user_param->flag == COMPRESS || user_param->flag == DECOMPRESS)) {
 		pr_err("user parameters are not valid!\n");
 		return -EINVAL;
 	}
@@ -157,7 +157,7 @@ int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 	return rc;
 }
 
-int deflate(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
+int decompress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 	char* dcompr_name) {
 	int rc;
 	struct crypto_comp *cc = crypto_alloc_comp(dcompr_name, 0, 0);
@@ -286,9 +286,9 @@ int do_xpress(xpress *xpress_obj)
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
 		break;
-	case DEFLATE:
+	case DECOMPRESS:
 		infilp->f_op->read(infilp, in_buffer, infile_size, &infilp->f_pos);
-		rc = deflate(in_buffer, out_buffer,
+		rc = decompress(in_buffer, out_buffer,
 					infile_size, &outfile_size, xpress_obj->algo);
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);

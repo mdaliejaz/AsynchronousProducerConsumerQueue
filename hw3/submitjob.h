@@ -1,7 +1,7 @@
 #define ENCRYPT 1
 #define DECRYPT 2
 #define COMPRESS 3
-#define DEFLATE 4
+#define DECOMPRESS 4
 #define CHECKSUM 5
 #define CONCAT 6
 #define LIST_JOB 7

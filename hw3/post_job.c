@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 						"once\n");
 			}
 			t_found = 1;
-			type = DEFLATE;
+			type = DECOMPRESS;
 			break;
 		case 'c':
 			if (t_found) {
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
 		// printf("0. outfile = %s\n", ((xcrypt *)job.work)->outfile);
 		// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
 		// printf("0. flags = %d\n", ((xcrypt *)job.work)->flag);
-	} else if (type == COMPRESS || type == DEFLATE) {
+	} else if (type == COMPRESS || type == DECOMPRESS) {
 		if (a_found == 0){
 			algo = "deflate";
 		}
