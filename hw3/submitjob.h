@@ -57,4 +57,4 @@ typedef struct concat_struct {
 } concat;
 
 int nl_bind(int);
-void receive_from_kernel(int);
+void *receive_from_kernel(void *);

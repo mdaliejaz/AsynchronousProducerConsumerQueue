@@ -6,6 +6,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <openssl/md5.h>
+#include <pthread.h>
 #include <string.h>
 #include "submitjob.h"
 
@@ -26,6 +27,7 @@ int main(int argc, char *argv[])
 	xpress xpress_work;
 	checksum checksum_work;
 	concat concat_work;
+	pthread_t rcv_msg_thread;
 
 	opt = getopt(argc, argv, "edsrcmluta:p:i:wPh");
 	while (opt != -1) {
@@ -340,7 +342,6 @@ int main(int argc, char *argv[])
 		}
 		job.type = type;
 		job.work = &job_id;
-		// printf("swap priority ID = %d\n", job_id);
 	} else {
 		fprintf(stderr, "You must specify a valid job type!\n");
 		goto out;
@@ -349,9 +350,7 @@ int main(int argc, char *argv[])
 	job.priority = priority;
 	pid = getpid();
 	job.pid = pid;
-	// printf("wait  = %d\n", wait);
 	job.wait = wait;
-	// printf("job.wait  = %d\n", job.wait);
 
 	if(wait)
 		rc = nl_bind(pid);
@@ -360,23 +359,32 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
-	// printf("pid = %d\n", pid);
-
-	// printf("type = %d\n", job.type);
-
 	rc = syscall(__NR_submitjob, (void *) &job);
-	if (rc == 0)
-		printf("syscall returned %d\n", rc);
-	else
-		printf("syscall returned %d (errno=%d)\n", rc, errno);
-
-	if(wait == 1) {
-		receive_from_kernel(pid);
-	} else if (type != LIST_JOB && type != REMOVE_JOB &&
-		type != SWAP_JOB_PRIORITY)
-		printf("The Job requested will have PID = %d.\n"
-			"The process will be run in the background. "
-			"Once finished, proper message will be put in dmesg!\n", pid);
+	if (rc == 0) {
+		if(wait == 1) {
+			/* create a second thread which listens for kernel msg */
+			if(pthread_create(&rcv_msg_thread, NULL, receive_from_kernel,
+				&pid)) {
+				fprintf(stderr, "Error creating thread for Kernel "
+					"response.\n");
+				rc = -1;
+				wait = 0;
+			} else {
+				fprintf(stdout, "Created a thread which will wait for "
+					"kernel Job response!\n");
+			}
+		} else if (type != LIST_JOB && type != REMOVE_JOB &&
+			type != SWAP_JOB_PRIORITY) {
+			fprintf(stdout, "The Job requested will have PID = %d.\n"
+				"The process will be run in the background. "
+				"Once finished, proper message will be put in dmesg!\n", pid);
+		}
+	}
+	else {
+		fprintf(stderr, "syscall returned %d (errno=%d)\n", rc, errno);
+		perror("Syscall failed");
+		wait = 0;
+	}
 
 	if(type == CONCAT) {
 		for(i = 0; i < concat_work.infile_count; i++) {
@@ -387,31 +395,50 @@ int main(int argc, char *argv[])
 			free(concat_work.infiles);
 	}
 
-	if(type == LIST_JOB) {
-		printf("List of Jobs in queue:\n%s", job_list);
+	// Some other tasks can run here
+	// while the other thread waits for kernel msg!
+	// The following sleep for instance is to demonstrate such behaviour
+	if(!rc && wait) {
+		sleep(3);
+		fprintf(stdout, "Print after 3 sec sleep to show Running of other "
+			"task possible in main thread while the other thread waits for "
+			"kernel msg!\n");
+	}
+
+	if(!rc && type == LIST_JOB) {
+		fprintf(stdout, "List of Jobs in queue:\n%s", job_list);
 		free(job_list);
 	}
 
-	if(type == REMOVE_JOB) {
+	if(!rc && type == REMOVE_JOB) {
 		if(errno == 22)
-			printf("Could not find Job %d! "
+			fprintf(stderr, "Could not find Job %d! "
 				"The Job might have already been scheduled.\n",job_id);
 		else if(rc)
-			printf("Removal of Job %d Failed! "
+			fprintf(stderr, "Removal of Job %d Failed! "
 				"The Job might have already been scheduled.\n",job_id);
 		else
-			printf("Removal of Job %d was Successful!\n", job_id);
+			fprintf(stdout, "Removal of Job %d was Successful!\n", job_id);
 	}
 
-	if(type == SWAP_JOB_PRIORITY) {
+	if(!rc && type == SWAP_JOB_PRIORITY) {
 		if(rc == -22)
-			printf("Could not find Job %d! "
+			fprintf(stderr, "Could not find Job %d! "
 				"The Job might have already been scheduled.\n",job_id);
 		else if(rc)
-			printf("Swapping Priority of Job %d Failed! "
+			fprintf(stderr, "Swapping Priority of Job %d Failed! "
 				"The Job might have already been scheduled.\n", job_id);
 		else
-			printf("Swapping Priority of Job %d was Successful!\n", job_id);
+			fprintf(stdout, "Swapping Priority of Job %d was Successful!\n", job_id);
+	}
+
+	if(!rc && wait) {
+		fprintf(stdout, "Main thread execution over! "
+			"Going to join the threads back.\n");
+		if(pthread_join(rcv_msg_thread, NULL)) {
+			fprintf(stderr, "Error joining thread\n");
+			return 2;
+		}
 	}
 
 out:

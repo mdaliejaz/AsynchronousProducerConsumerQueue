@@ -9,7 +9,7 @@ netlink:
 	gcc -c -Wall -Werror netlink.c -o netlink.o
 
 post_job: post_job.c netlink.o
-	gcc -Wall -Werror -I$(INC)/generated/uapi -I$(INC)/uapi post_job.c netlink.o -o post_job -lcrypto
+	gcc -Wall -Werror -I$(INC)/generated/uapi -I$(INC)/uapi post_job.c netlink.o -o post_job -lcrypto -pthread
 
 submitjob:
 	make -Wall -Werror -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules

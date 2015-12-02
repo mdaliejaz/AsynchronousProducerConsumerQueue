@@ -29,14 +29,14 @@ int nl_bind(int pid)
     return 0;
 }
 
-void receive_from_kernel(int pid)
+void *receive_from_kernel(void *pid)
 {
     char *str1, str2[10], *junk;
     int ret_err;
     nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
     memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
     nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
-    nlh->nlmsg_pid = pid;
+    nlh->nlmsg_pid = *(int *)pid;
     nlh->nlmsg_flags = 0;
 
     iov.iov_base = (void *)nlh;
@@ -44,12 +44,16 @@ void receive_from_kernel(int pid)
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    printf("Waiting for Kernel's Response Message to the posted Job.\n");
+    fprintf(stdout, "Netlink Thread: Waiting for Kernel's Response Message "
+        "to the posted Job.\n");
 
     /* Read message from kernel */
     recvmsg(sock_fd, &msg, 0);
-    printf("Received following Message Payload from Kernel: \n%s", (char *)NLMSG_DATA(nlh));
+    fprintf(stdout, "Netlink thread received following Message "
+        "Payload from Kernel: \n%s", (char *)NLMSG_DATA(nlh));
 
+    // Parse the returned message to find the error code for perror
+    // This section assumes the messages end with (Return Code = xx)
     str1 = strstr((char *)NLMSG_DATA(nlh), "(Return Code = ");
     if(str1 != NULL) {
         memcpy(str2, &str1[strlen(str1)-5], 4);
@@ -58,9 +62,10 @@ void receive_from_kernel(int pid)
         if(ret_err < 0)
             ret_err *= -1;
         errno = ret_err;
-        perror("Reason");
-        printf("See dmesg for more details.\n");
+        perror("Syscall failed");
+        fprintf(stderr, "See dmesg for more details.\n");
     }
 
     close(sock_fd);
+    return NULL;
 }
