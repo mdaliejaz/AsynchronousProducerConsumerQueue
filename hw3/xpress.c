@@ -196,7 +196,7 @@ int deflate(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 
 int do_xpress(xpress *xpress_obj)
 {
-	int rc = 0, out_exist = 0;
+	int rc = 0, out_exist = 0, file_size = 0;
 	char *in_buffer, *out_buffer;
 	char *tmpfilp_name = "xpressaa6b5d17e373744f14c07f71b22f9549.tmp";
 	struct file *infilp, *outfilp, *tmpfilp;
@@ -252,13 +252,28 @@ int do_xpress(xpress *xpress_obj)
 		rc = -ENOMEM;
 		goto close_outfilp;
 	}
-	out_buffer = (char *) kzalloc(infile_size * 3, GFP_KERNEL);
+
+	infilp->f_path.dentry->d_inode->i_op->getxattr(
+			infilp->f_path.dentry, "user.org_size",
+			&file_size, sizeof(int));
+
+	if(xpress_obj->flag == COMPRESS) {
+		outfile_size = infile_size;
+	} else {
+		infilp->f_path.dentry->d_inode->i_op->getxattr(
+			infilp->f_path.dentry, "user.org_size",
+			&file_size, sizeof(int));
+		if(file_size == 0)
+			outfile_size = infile_size * 3;
+		else
+			outfile_size = file_size;
+	}
+
+	out_buffer = (char *) kzalloc(outfile_size, GFP_KERNEL);
 	if (!out_buffer) {
 		rc = -ENOMEM;
 		goto free_in_buffer;
 	}
-
-	outfile_size = infile_size * 3;
 
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
@@ -272,19 +287,21 @@ int do_xpress(xpress *xpress_obj)
 					&tmpfilp->f_pos);
 		break;
 	case DEFLATE:
-		printk("in deflate\n");
 		infilp->f_op->read(infilp, in_buffer, infile_size, &infilp->f_pos);
-		printk("infile_size = %d\n", infile_size);
-		printk("outfile_size = %d\n", outfile_size);
 		rc = deflate(in_buffer, out_buffer,
 					infile_size, &outfile_size, xpress_obj->algo);
-		printk("outfile_size = %d\n", outfile_size);
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
 		break;
 	default:
 		printk("Unknown Flag!\n");
 		goto reset_fs;
+	}
+
+	if(xpress_obj->flag == COMPRESS) {
+		tmpfilp->f_path.dentry->d_inode->i_op->setxattr(
+			tmpfilp->f_path.dentry, "user.org_size",
+			&infile_size, sizeof(int), 0);
 	}
 
 	rc = vfs_rename(tmpfilp->f_path.dentry->d_parent->d_inode,
@@ -302,9 +319,8 @@ int do_xpress(xpress *xpress_obj)
 				outfilp->f_path.dentry, &del_inode);
 			outfilp = NULL;
 		}
-		if (outfilp != NULL && !IS_ERR(outfilp)) {
+		if (outfilp != NULL && !IS_ERR(outfilp))
 			filp_close(outfilp, NULL);
-		}
 	close_tmpfilp:
 		if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
 			if(tmpfilp->f_path.dentry != NULL &&
@@ -314,9 +330,8 @@ int do_xpress(xpress *xpress_obj)
 			}
 			tmpfilp = NULL;
 		}
-		if (tmpfilp != NULL && !IS_ERR(tmpfilp)) {
+		if (tmpfilp != NULL && !IS_ERR(tmpfilp))
 			filp_close(tmpfilp, NULL);
-		}
 	close_infilp:
 		if (infilp && !IS_ERR(infilp))
 			filp_close(infilp, NULL);

@@ -550,9 +550,7 @@ asmlinkage long submitjob(void *arg)
 		node->id = in_work->id;
 		node->type = in_work->type;
 		node->pid = in_work->pid;
-		// printk("job->wait = %d\n", job->wait);
 		node->wait = job->wait;
-		// printk("node->wait = %d\n", node->wait);
 		node->priority = in_work->priority;
 		node->queued_job = (struct work_struct *)in_work;
 		if(job->priority) {
