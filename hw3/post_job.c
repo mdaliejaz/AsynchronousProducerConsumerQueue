@@ -232,7 +232,6 @@ int main(int argc, char *argv[])
 		xpress_work.flag = type;
 
 		job.type = type;
-		printf("type = %d\n", type);
 		job.work = &xpress_work;
 
 		if(strlen(xpress_work.infile) > MAX_FILE_NAME_LENGTH ||
@@ -342,6 +341,9 @@ int main(int argc, char *argv[])
 		job.type = type;
 		job.work = &job_id;
 		// printf("swap priority ID = %d\n", job_id);
+	} else {
+		fprintf(stderr, "You must specify a valid job type!\n");
+		goto out;
 	}
 
 	job.priority = priority;

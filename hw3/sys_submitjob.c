@@ -79,7 +79,6 @@ void submit_work_func(struct work_struct *work) {
 	struct list_head *pos, *q;
 	job_list *node = NULL;
 
-	// msleep(10000);
 	switch(in_work->type) {
 	case ENCRYPT:
 	case DECRYPT:
@@ -133,7 +132,6 @@ void submit_work_func(struct work_struct *work) {
 		else
 			sprintf(msg, "Checksum for %s computed: %s.\n",
 				((checksum *)in_work->task)->infile, checksum_result);
-		// printk("checksum_result = %s\n", checksum_result);
 		if(checksum_result != NULL)
 			kfree(checksum_result);
 	free_checksum_data:
@@ -174,8 +172,6 @@ void submit_work_func(struct work_struct *work) {
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
 		if(node->id == in_work->id) {
-			printk("deleting id = %d\n", node->id);
-			printk("node->wait = %d\n", node->wait);
 			pid = node->pid;
 			wait = node->wait;
 			sprintf(post_msg, "Job %d(PID = %d): %s", node->id, node->pid, msg);

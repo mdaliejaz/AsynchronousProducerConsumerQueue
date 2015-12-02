@@ -7,6 +7,7 @@
 
 static DEFINE_MUTEX(compr_mutex);
 static DEFINE_MUTEX(dcompr_mutex);
+static DEFINE_MUTEX(flock_mutex);
 
 int validate_user_xpress_args(xpress *user_param)
 {
@@ -196,15 +197,64 @@ int decompress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 
 int do_xpress(xpress *xpress_obj)
 {
-	int rc = 0, out_exist = 0, file_size = 0;
+	int rc = 0, out_exist = 0, file_size = 0, sleep_time = 500, obtained_lock = 0;
 	char *in_buffer, *out_buffer;
+	char infilp_lock_name[256], outfilp_lock_name[256];
 	char *tmpfilp_name = "xpressaa6b5d17e373744f14c07f71b22f9549.tmp";
-	struct file *infilp, *outfilp, *tmpfilp;
+	struct file *infilp, *outfilp, *tmpfilp, *infilp_lock = NULL, *outfilp_lock = NULL;
 	struct inode *del_inode;
 	size_t infile_size, outfile_size;
 	struct kstat stat;
 	umode_t infile_mode;
 	mm_segment_t oldfs;
+
+	sprintf(infilp_lock_name, "%s.lock", xpress_obj->infile);
+	sprintf(outfilp_lock_name, "%s.lock", xpress_obj->outfile);
+
+	while(!obtained_lock) {
+		mutex_lock(&flock_mutex);
+		if(vfs_stat(infilp_lock_name, &stat) != 0) {
+			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
+			if(vfs_stat(outfilp_lock_name, &stat) != 0) {
+				outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
+				obtained_lock = 1;
+				printk("Obtained lock!\n");
+				mutex_unlock(&flock_mutex);
+			} else {
+				if (infilp_lock && !IS_ERR(infilp_lock)) {
+					if(infilp_lock->f_path.dentry != NULL &&
+						infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+						vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
+							infilp_lock->f_path.dentry, &del_inode);
+					}
+					infilp_lock = NULL;
+				}
+				mutex_unlock(&flock_mutex);
+				if(sleep_time > 10000) {
+					rc = -EBUSY;
+					pr_err("Couldn't get lock even after waiting for more "
+						"than 30 seconds! Exiting.\n");
+					goto out;
+				}
+				sleep_time = sleep_time * 2;
+				printk("Cannot get lock on output file. Sleeping for %d "
+					"msec!\n", sleep_time);
+				msleep(sleep_time);
+			}
+		} else {
+			mutex_unlock(&flock_mutex);
+			if(sleep_time > 10000) {
+				rc = -EBUSY;
+				pr_err("Couldn't get lock even after waiting for more "
+					"than 30 seconds! Exiting.\n");
+				goto out;
+			}
+			sleep_time = sleep_time * 2;
+			printk("Cannot get lock on input file. Sleeping for %d "
+				"msec!\n", sleep_time);
+			msleep(sleep_time);
+		}
+	}
 
 	// open in/output files the files
 	infilp = filp_open(xpress_obj->infile, O_RDONLY, 0);
@@ -246,7 +296,7 @@ int do_xpress(xpress *xpress_obj)
 		goto close_outfilp;
 	}
 
-		// create the buffers
+	// create the buffers
 	in_buffer = (char *)kzalloc(infile_size, GFP_KERNEL);
 	if (!in_buffer) {
 		rc = -ENOMEM;
@@ -308,32 +358,49 @@ int do_xpress(xpress *xpress_obj)
 		tmpfilp->f_path.dentry, outfilp->f_path.dentry->d_parent->d_inode,
 		outfilp->f_path.dentry, NULL, 0);
 
-	reset_fs:
-		set_fs(oldfs);
+reset_fs:
+	set_fs(oldfs);
 	kfree(out_buffer);
-	free_in_buffer:
-		kfree(in_buffer);
-	close_outfilp:
-		if(out_exist && rc < 0) {
-			vfs_unlink(outfilp->f_path.dentry->d_parent->d_inode,
-				outfilp->f_path.dentry, &del_inode);
-			outfilp = NULL;
+free_in_buffer:
+	kfree(in_buffer);
+close_outfilp:
+	if(out_exist && rc < 0) {
+		vfs_unlink(outfilp->f_path.dentry->d_parent->d_inode,
+			outfilp->f_path.dentry, &del_inode);
+		outfilp = NULL;
+	}
+	if (outfilp != NULL && !IS_ERR(outfilp))
+		filp_close(outfilp, NULL);
+close_tmpfilp:
+	if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
+		if(tmpfilp->f_path.dentry != NULL &&
+			tmpfilp->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(tmpfilp->f_path.dentry->d_parent->d_inode,
+				tmpfilp->f_path.dentry, &del_inode);
 		}
-		if (outfilp != NULL && !IS_ERR(outfilp))
-			filp_close(outfilp, NULL);
-	close_tmpfilp:
-		if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
-			if(tmpfilp->f_path.dentry != NULL &&
-				tmpfilp->f_path.dentry->d_parent->d_inode != NULL) {
-				vfs_unlink(tmpfilp->f_path.dentry->d_parent->d_inode,
-					tmpfilp->f_path.dentry, &del_inode);
-			}
-			tmpfilp = NULL;
+		tmpfilp = NULL;
+	}
+	if (tmpfilp != NULL && !IS_ERR(tmpfilp))
+		filp_close(tmpfilp, NULL);
+close_infilp:
+	if (infilp && !IS_ERR(infilp))
+		filp_close(infilp, NULL);
+out:
+	if (infilp_lock && !IS_ERR(infilp_lock)) {
+		if(infilp_lock->f_path.dentry != NULL &&
+			infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
+				infilp_lock->f_path.dentry, &del_inode);
 		}
-		if (tmpfilp != NULL && !IS_ERR(tmpfilp))
-			filp_close(tmpfilp, NULL);
-	close_infilp:
-		if (infilp && !IS_ERR(infilp))
-			filp_close(infilp, NULL);
+		infilp_lock = NULL;
+	}
+	if (outfilp_lock && !IS_ERR(outfilp_lock)) {
+		if(outfilp_lock->f_path.dentry != NULL &&
+			outfilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
+			vfs_unlink(outfilp_lock->f_path.dentry->d_parent->d_inode,
+				outfilp_lock->f_path.dentry, &del_inode);
+		}
+		outfilp_lock = NULL;
+	}
 	return rc;
 }

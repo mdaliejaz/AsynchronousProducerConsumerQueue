@@ -370,7 +370,8 @@ int do_xcrypt(xcrypt *xcrypt_obj)
 					goto out;
 				}
 				sleep_time = sleep_time * 2;
-				printk("sleeping for %d ms!\n", sleep_time);
+				printk("Cannot get lock on output file. Sleeping for %d "
+					"msec!\n", sleep_time);
 				msleep(sleep_time);
 			}
 		} else {
@@ -382,7 +383,8 @@ int do_xcrypt(xcrypt *xcrypt_obj)
 				goto out;
 			}
 			sleep_time = sleep_time * 2;
-			printk("outer sleeping for %d ms!\n", sleep_time);
+			printk("Cannot get lock on input file. Sleeping for %d "
+				"msec!\n", sleep_time);
 			msleep(sleep_time);
 		}
 	}
