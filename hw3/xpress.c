@@ -122,10 +122,9 @@ int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 		return PTR_ERR(cc);
 	}
 
-	// compression algorithm
-	// COMPR_LZO "lzo"
-	// COMPR_ZLIB "deflate"
-	if (strcmp(compr_name, "lzo") && strcmp(compr_name, "deflate")) {
+	// compression algorithm lzo, lz4 & deflate are only supported
+	if (strcmp(dcompr_name, "lzo") && strcmp(dcompr_name, "deflate"
+		&& strcmp(dcompr_name, "lz4")) {
 		rc = -EINVAL;
 		pr_err("unrecognized compression algorithm!\n");
 		goto out;
@@ -169,12 +168,11 @@ int decompress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 		return PTR_ERR(cc);
 	}
 
-	// compression algorithm
-	// COMPR_LZO "lzo"
-	// COMPR_ZLIB "deflate"
-	if (strcmp(dcompr_name, "lzo") && strcmp(dcompr_name, "deflate")) {
+	// compression algorithm lzo, lz4 & deflate are only supported
+	if (strcmp(dcompr_name, "lzo") && strcmp(dcompr_name, "deflate"
+		&& strcmp(dcompr_name, "lz4")) {
 		rc = -EINVAL;
-		pr_err("unrecognized compression algorithm!\n");
+		pr_err("unrecognized decompression algorithm!\n");
 		goto out;
 	}
 
