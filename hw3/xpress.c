@@ -100,14 +100,14 @@ int copy_xpress_data_to_kernel(xpress *user_param, xpress *kernel_param)
 
 	return 0;
 
-	free_algo:
-		kfree(kernel_param->algo);
-	free_outfile:
-		kfree(kernel_param->outfile);
-	free_infile:
-		kfree(kernel_param->infile);
-	out:
-		return rc;
+free_algo:
+	kfree(kernel_param->algo);
+free_outfile:
+	kfree(kernel_param->outfile);
+free_infile:
+	kfree(kernel_param->infile);
+out:
+	return rc;
 }
 
 int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
@@ -153,8 +153,8 @@ int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 		*out_len = in_len;
 	}
 
-	out:
-		crypto_free_comp(cc);
+out:
+	crypto_free_comp(cc);
 	return rc;
 }
 
@@ -190,8 +190,8 @@ int decompress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 		goto out;
 	}
 
-	out:
-		crypto_free_comp(cc);
+out:
+	crypto_free_comp(cc);
 	return rc;
 }
 

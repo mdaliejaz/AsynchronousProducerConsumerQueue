@@ -414,6 +414,6 @@ int main(int argc, char *argv[])
 			printf("Swapping Priority of Job %d was Successful!\n", job_id);
 	}
 
-	out:
+out:
 	exit(rc);
 }

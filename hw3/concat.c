@@ -102,15 +102,15 @@ int copy_concat_data_to_kernel(concat *user_param, concat *kernel_param)
 
 	return 0;
 
-	free_outfile:
-		kfree(kernel_param->outfile);
-	free_infiles:
-		for(i = 0; i < user_param->infile_count; i++) {
-			kfree(kernel_param->infiles[i]);
-		}
-		kfree(kernel_param->infiles);
-	out:
-		return rc;
+free_outfile:
+	kfree(kernel_param->outfile);
+free_infiles:
+	for(i = 0; i < user_param->infile_count; i++) {
+		kfree(kernel_param->infiles[i]);
+	}
+	kfree(kernel_param->infiles);
+out:
+	return rc;
 }
 
 int do_concat(concat *concat_obj)
