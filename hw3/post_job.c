@@ -14,6 +14,99 @@
 #error submitjob system call not defined
 #endif
 
+/*
+ * This function prints the help for this driver program.
+ */
+void print_help_on_stdout() {
+	fprintf(stdout, "POST_JOB(1)\t\t\tUser Commands\t\t\tPOST_JOB(1)\n\n");
+
+	fprintf(stdout, "NAME\n\tpost_job - posts jobs for asyncronous "
+		"processing.\n\n");
+
+	fprintf(stdout, "SYNOPSIS\n\t./post_jobs <job_option> [input_options] "
+		"[inputFile ...] [outputFile].\n\n");
+
+	fprintf(stdout, "DESCRIPTION\n\tPosts Jobs asyncronously to the kernel "
+		"for processing. Currently Encryption, Decryption, Compression, "
+		"Decompression, Checksum computation, Concatenation of multiple "
+		"files, Listing of Jobs on queue, Removing a job from queue and "
+		"Swapping of Job priority is supported.\n\tThe user can choose "
+		"to wait for the job response or look at it later in dmesg.\n");
+	fprintf(stdout, "\tThe submitjob() system call is defined in the kernel "
+		"module\n\tsys_submitjob.c.\n");
+
+	fprintf(stdout, "\n\tThe Job options are as follows:\n");
+	fprintf(stdout, "\t-e\tencrypt the given file\n");
+	fprintf(stdout, "\t-d\tdecrypt the given encrypted file\n");
+	fprintf(stdout, "\t-s\tshorten or compress the given file\n");
+	fprintf(stdout, "\t-r\trestore or decompress the given compressed file\n");
+	fprintf(stdout, "\t-c\tcompute checksum of the given file\n");
+	fprintf(stdout, "\t-m\tmerge or concatenate the given input files\n");
+	fprintf(stdout, "\t-l\tlist the queued jobs waiting to be processed\n");
+	fprintf(stdout, "\t-u\tundo or remove a previously put job\n");
+	fprintf(stdout, "\t-t\ttweak or swap priority of previously put job\n");
+
+	fprintf(stdout, "\n\tInput options are as follows:\n");
+	fprintf(stdout, "\t-a\talgorithm to be used for encryption, decryption,\n"
+		"\t\tcompression, decompression and checksum computation\n");
+	fprintf(stdout, "\t-p\tpassword to be used for encryption, decryption\n"
+		"\t\tPassword should be at least 6 characters long\n");
+	fprintf(stdout, "\t-i\tID of the Job to be deleted or whose priority "
+		"needs to be changed.\n");
+	fprintf(stdout, "\t-w\twait for the job response\n");
+	fprintf(stdout, "\t-P\tpriority to be used as high for the given job\n"
+		"\t\tdefault priority is 'no priority' for all the jobs except "
+		"checksum computation whose priority is always high\n");
+	fprintf(stdout, "\t-h\tdisplay this help and exit\n\n");
+	
+	fprintf(stdout, "EXAMPLES\n\t./post_job -e -p password -a aes infile "
+		"outfile\n");
+	fprintf(stdout, "\t\tEncrypts the given input File 'infile' "
+		"using the password 'password' and AES algorithm. "
+		"The output is an encrypted file named 'outfile'.\n");
+	fprintf(stdout, "\t./post_job -d -p password -a des infile outfile\n");
+	fprintf(stdout, "\t\tDecrypts the given input File 'infile' "
+		"using the password 'password' and DES algorithm. "
+		"The output is a decrypted file named 'outfile'.\n");
+	fprintf(stdout, "\t./post_job -s -a deflate infile outfile\n");
+	fprintf(stdout, "\t\tCompress the given input File 'infile' "
+		"using the 'deflate' algorithm. The output is a compressed file "
+		"named 'outFile'.\n");
+	fprintf(stdout, "\t./post_job -r -a lzo infile outfile\n");
+	fprintf(stdout, "\t\tDecompress the given input File 'infile' "
+		"using the 'lzo' algorithm. The output is a decompressed file "
+		"named 'outFile'.\n");
+	fprintf(stdout, "\t./post_job -c -a md5 infile\n");
+	fprintf(stdout, "\t\tComputes Checksum of the given input File 'infile' "
+		"using the 'md5' algorithm.\n");
+	fprintf(stdout, "\t./post_job -m inFile1 infile2 infile3 outfile\n");
+	fprintf(stdout, "\t\tConcatenates the given input Files 'infile1' "
+		"'infile2' and 'infile3' to gives a new concatenated file "
+		"'outfile'.\n");
+	fprintf(stdout, "\t./post_job -l\n");
+	fprintf(stdout, "\t\tLists the current jobs on queue.\n");
+	fprintf(stdout, "\t./post_job -u -i 3\n");
+	fprintf(stdout, "\t\tRemoved the job with job ID 3 from the "
+		"workqueue.\n");
+	fprintf(stdout, "\t./post_job -t -i 3\n");
+	fprintf(stdout, "\t\tSwap the priority from high to low or low to high "
+		"for the job with job ID 3.\n\n");
+
+	fprintf(stdout, "AUTHOR\n\tWritten by Muhammad Ali Ejaz under the "
+		"guidance of Professor Erez Zadok.\n\n");
+
+	fprintf(stdout, "REPORTING BUGS\n\tReport bugs to "
+		"<mejaz@cs.stonybrook.edu>.\n\n");
+
+	fprintf(stdout, "COPYRIGHT\n\tCopyright (c) 2015 Muhammad Ali Ejaz.\n"
+		"\tThis  is free software. You may redistribute copies of it and/or "
+		"modify it under the terms of the GNU General Public License "
+		"<http://www.gnu.org/licenses/gpl.html>.\n\tThere is NO WARRANTY, "
+		"to the extent permitted by law.\n\n");
+
+	fprintf(stdout, "CSE-506\t\t\tDecember 2015\t\t\tPOST_JOB(1)\n\n");
+}
+
 int main(int argc, char *argv[])
 {
 	int rc = 0, pid, i, j, priority = 0, wait = 0;
@@ -144,7 +237,7 @@ int main(int argc, char *argv[])
 			priority = 1;
 			break;
 		case 'h':
-			printf("./post_job: UNIMPLEMENTED.\n");
+			print_help_on_stdout();
 			return 0;
 		default:
 			printf("./post_job: Try './post_job -h' for more information.\n");
