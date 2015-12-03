@@ -48,14 +48,14 @@ long validate_user_args(submit_job *user_param) {
 	return 0;
 }
 
-static void nl_send_msg(int pid, char *msg)
+static void nl_send_msg(int pid, nl_msg *msg)
 {
     struct nlmsghdr *header;
     struct sk_buff *skb_out;
     int msg_size;
     int rc = 0;
 
-    msg_size = strlen(msg);
+    msg_size = sizeof(nl_msg);
 
     skb_out = nlmsg_new(msg_size, 0);
     if (!skb_out) {
@@ -65,7 +65,7 @@ static void nl_send_msg(int pid, char *msg)
 
     header = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
     NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
-    strncpy(nlmsg_data(header), msg, msg_size);
+    memcpy(nlmsg_data(header), msg, msg_size);
 
     rc = nlmsg_unicast(nl_sk, skb_out, pid);
     if (rc < 0)
@@ -78,14 +78,15 @@ void submit_work_func(struct work_struct *work) {
 	qwork *in_work = (qwork *)work;
 	struct list_head *pos, *q;
 	job_list *node = NULL;
+	nl_msg message;
 
 	switch(in_work->type) {
 	case ENCRYPT:
 	case DECRYPT:
 		rc = do_xcrypt((xcrypt *)in_work->task);
 		if(rc)
-			sprintf(msg, "En/Decryption of %s Failed! (Return Code = %d)\n",
-				((xcrypt *)in_work->task)->infile, rc);
+			sprintf(msg, "En/Decryption of %s Failed!\n",
+				((xcrypt *)in_work->task)->infile);
 		else
 			sprintf(msg, "En/Decryption of %s went successful!\n",
 				((xcrypt *)in_work->task)->infile);
@@ -104,8 +105,8 @@ void submit_work_func(struct work_struct *work) {
 	case DECOMPRESS:
 		rc = do_xpress((xpress *)in_work->task);
 		if(rc)
-			sprintf(msg, "De/Compression of %s Failed! (Return Code = %d)\n",
-				((xpress *)in_work->task)->infile, rc);
+			sprintf(msg, "De/Compression of %s Failed!\n",
+				((xpress *)in_work->task)->infile);
 		else
 			sprintf(msg, "De/Compression of %s went successful!\n",
 				((xpress *)in_work->task)->infile);
@@ -125,26 +126,30 @@ void submit_work_func(struct work_struct *work) {
 			rc = -ENOMEM;
 			goto free_checksum_data;
 		}
+		printk("No probsssss\n");
 		rc = do_checksum((checksum *)in_work->task, checksum_result);
 		if(rc)
-			sprintf(msg, "Checksum computation of %s Failed! (Return Code = %d)\n",
-				((checksum *)in_work->task)->infile, rc);
+			sprintf(msg, "Checksum computation of %s Failed!\n",
+				((checksum *)in_work->task)->infile);
 		else
 			sprintf(msg, "Checksum for %s computed: %s.\n",
 				((checksum *)in_work->task)->infile, checksum_result);
+		printk("No probsssss2\n");
 		if(checksum_result != NULL)
 			kfree(checksum_result);
-	free_checksum_data:
+free_checksum_data:
 		if(((checksum *)in_work->task)->infile)
 			kfree(((checksum *)in_work->task)->infile);
+		printk("No probsssss3\n");
 		if((checksum *)in_work->task != NULL)
 			kfree((checksum *)in_work->task);
+		printk("No probsssss4\n");
 		break;
 	case CONCAT:
 		rc = do_concat((concat *)in_work->task);
 		if(rc)
-			sprintf(msg, "Concatenation of %d files Failed! (Return Code = %d)\n",
-				((concat *)in_work->task)->infile_count, rc);
+			sprintf(msg, "Concatenation of %d files Failed!\n",
+				((concat *)in_work->task)->infile_count);
 		else
 			sprintf(msg, "Concatenated %d files successfully!\n",
 				((concat *)in_work->task)->infile_count);
@@ -163,12 +168,15 @@ void submit_work_func(struct work_struct *work) {
 		printk("Do something \n");
 	}
 
+	printk("No probsssss7\n");
 	if(in_work->priority)
 		atomic_dec(&priority_queue_size);
 	else
 		atomic_dec(&queue_size);
 
+	printk("No probsssss8\n");
 	spin_lock(&list_lock);
+	printk("No probsssss9\n");
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
 		if(node->id == in_work->id) {
@@ -179,13 +187,18 @@ void submit_work_func(struct work_struct *work) {
 			kfree(node);
 		}
 	}
+	printk("No probsssss10\n");
 	spin_unlock(&list_lock);
 
+	printk("No probsssss11\n");
+	sprintf(message.msg, "%s", post_msg);
+	message.err = rc;
 	if(wait == 1)
-		nl_send_msg(in_work->pid, post_msg);
+		nl_send_msg(in_work->pid, &message);
 	pr_info("%s", post_msg);
+	printk("No probsssss12\n");
 
-	if(in_work->is_cancelling == 0)
+	if(in_work && in_work->is_cancelling == 0)
 		kfree(work);
 	return;
 }
@@ -353,6 +366,9 @@ asmlinkage long submitjob(void *arg)
 		spin_unlock(&list_lock);
 		rc = copy_to_user((char *)((submit_job *)arg)->work, return_job_list,
 			strlen(return_job_list));
+		if (rc) {
+			pr_err("Copying of Job List to User Failed.\n");
+		}
 		goto free_job;
 		break;
 	case REMOVE_JOB:
@@ -360,6 +376,10 @@ asmlinkage long submitjob(void *arg)
 		// 	*(int *)((submit_job *)arg)->work);
 		rc = copy_from_user(&job_id, (int *)((submit_job *)arg)->work,
 			sizeof(int));
+		if (rc) {
+			pr_err("Copying of Job ID from User Failed.\n");
+			goto free_job;
+		}
 		spin_lock(&list_lock);
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
@@ -367,11 +387,11 @@ asmlinkage long submitjob(void *arg)
 				job_found = 1;
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
-				if(node->priority)
-					atomic_dec(&priority_queue_size);
-				else
-					atomic_dec(&queue_size);
 				if(rc) {
+					if(node->priority)
+						atomic_dec(&priority_queue_size);
+					else
+						atomic_dec(&queue_size);
 					pr_info("Successfully Deleted Job %d.\n", job_id);
 					if(node != NULL)
 						in_work = (qwork *)node->queued_job;
@@ -462,6 +482,10 @@ asmlinkage long submitjob(void *arg)
 	case SWAP_JOB_PRIORITY:
 		rc = copy_from_user(&job_id, (int *)((submit_job *)arg)->work,
 			sizeof(int));
+		if (rc) {
+			pr_err("Copying of Job ID from User Failed.\n");
+			goto free_job;
+		}
 		spin_lock(&list_lock);
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
@@ -469,11 +493,11 @@ asmlinkage long submitjob(void *arg)
 				job_found = 1;
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
-				if(node->priority)
-					atomic_dec(&priority_queue_size);
-				else
-					atomic_dec(&queue_size);
 				if(rc) {
+					if(node->priority)
+						atomic_dec(&priority_queue_size);
+					else
+						atomic_dec(&queue_size);
 					pr_info("Successfully Deleted Job %d.\n", job_id);
 					if(node != NULL) {
 						if(node->priority) {

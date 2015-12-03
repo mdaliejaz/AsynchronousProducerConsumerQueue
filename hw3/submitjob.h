@@ -56,5 +56,11 @@ typedef struct concat_struct {
 	// unsigned int flags;
 } concat;
 
+//struct for netlink message
+typedef struct netlink_msg_struct {
+	char msg[256];
+	char err;
+} nl_msg;
+
 int nl_bind(int);
 void *receive_from_kernel(void *);

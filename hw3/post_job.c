@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
 				perror("realpath of one of the input file");
 				return -1;
 			}
-			printf("infile[%d] = %s\n", j, concat_work.infiles[j]);
+			// printf("infile[%d] = %s\n", j, concat_work.infiles[j]);
 
 			if(strlen(concat_work.infiles[j]) > MAX_FILE_NAME_LENGTH) {
 				fprintf(stderr, "The maximum size of filename allowed is 255 "
@@ -375,8 +375,7 @@ int main(int argc, char *argv[])
 			}
 		} else if (type != LIST_JOB && type != REMOVE_JOB &&
 			type != SWAP_JOB_PRIORITY) {
-			fprintf(stdout, "The Job requested will have PID = %d.\n"
-				"The process will be run in the background. "
+			fprintf(stdout, "Job PID: %d.\n"
 				"Once finished, proper message will be put in dmesg!\n", pid);
 		}
 	}
@@ -399,10 +398,9 @@ int main(int argc, char *argv[])
 	// while the other thread waits for kernel msg!
 	// The following sleep for instance is to demonstrate such behaviour
 	if(!rc && wait) {
-		sleep(3);
-		fprintf(stdout, "Print after 3 sec sleep to show Running of other "
-			"task possible in main thread while the other thread waits for "
-			"kernel msg!\n");
+		sleep(1);
+		fprintf(stdout, "Main Thread: (Test) Running task possible in main "
+			"thread while the spawned thread waits for kernel msg!\n");
 	}
 
 	if(!rc && type == LIST_JOB) {

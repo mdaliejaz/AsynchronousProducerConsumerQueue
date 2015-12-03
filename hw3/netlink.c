@@ -29,10 +29,53 @@ int nl_bind(int pid)
     return 0;
 }
 
+// void *receive_from_kernel(void *pid)
+// {
+//     char *str1, str2[10], *junk;
+//     nl_msg message;
+//     int ret_err;
+//     nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
+//     memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
+//     nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+//     nlh->nlmsg_pid = *(int *)pid;
+//     nlh->nlmsg_flags = 0;
+
+//     iov.iov_base = (void *)nlh;
+//     iov.iov_len = nlh->nlmsg_len;
+//     msg.msg_iov = &iov;
+//     msg.msg_iovlen = 1;
+
+//     fprintf(stdout, "Netlink Thread: Waiting for Kernel's Response Message "
+//         "to the posted Job.\n");
+
+//     /* Read message from kernel */
+//     recvmsg(sock_fd, &msg, 0);
+//     fprintf(stdout, "Netlink thread received following Message "
+//         "Payload from Kernel: \n%s", (char *)NLMSG_DATA(nlh));
+
+//     // Parse the returned message to find the error code for perror
+//     // This section assumes the messages end with (Return Code = xx)
+//     str1 = strstr((char *)NLMSG_DATA(nlh), "(Return Code = ");
+//     if(str1 != NULL) {
+//         memcpy(str2, &str1[strlen(str1)-5], 4);
+//         str2[4] = '\0';
+//         ret_err = strtol(str2, &junk, 10);
+//         if(ret_err < 0)
+//             ret_err *= -1;
+//         errno = ret_err;
+//         perror("Syscall failed");
+//         fprintf(stderr, "See dmesg for more details.\n");
+//     }
+
+//     close(sock_fd);
+//     return NULL;
+// }
+
+
 void *receive_from_kernel(void *pid)
 {
-    char *str1, str2[10], *junk;
     int ret_err;
+    nl_msg *message;
     nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
     memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
     nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
@@ -44,28 +87,24 @@ void *receive_from_kernel(void *pid)
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    fprintf(stdout, "Netlink Thread: Waiting for Kernel's Response Message "
-        "to the posted Job.\n");
+    // fprintf(stdout, "Netlink Thread: Waiting for Kernel's Response Message "
+    //     "to the posted Job.\n");
 
     /* Read message from kernel */
     recvmsg(sock_fd, &msg, 0);
-    fprintf(stdout, "Netlink thread received following Message "
-        "Payload from Kernel: \n%s", (char *)NLMSG_DATA(nlh));
+    message = NLMSG_DATA(nlh);
 
-    // Parse the returned message to find the error code for perror
-    // This section assumes the messages end with (Return Code = xx)
-    str1 = strstr((char *)NLMSG_DATA(nlh), "(Return Code = ");
-    if(str1 != NULL) {
-        memcpy(str2, &str1[strlen(str1)-5], 4);
-        str2[4] = '\0';
-        ret_err = strtol(str2, &junk, 10);
-        if(ret_err < 0)
-            ret_err *= -1;
-        errno = ret_err;
-        perror("Syscall failed");
+    ret_err = message->err;
+    if(ret_err < 0)
+        ret_err *= -1;
+    errno = ret_err;
+    fprintf(stdout, "Netlink Thread: Payload from Kernel: %s", message->msg);
+    if(ret_err) {
+        perror("Syscall");
         fprintf(stderr, "See dmesg for more details.\n");
     }
 
     close(sock_fd);
     return NULL;
 }
+
