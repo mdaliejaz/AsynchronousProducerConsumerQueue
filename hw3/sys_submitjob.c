@@ -74,7 +74,7 @@ static void nl_send_msg(int pid, nl_msg *msg)
 
 void submit_work_func(struct work_struct *work) {
 	int rc = 0, i, wait = 0, pid;
-	char *checksum_result = NULL, msg[100] = {0}, post_msg[500] = {0};
+	char checksum_result[40] = {0}, msg[100] = {0}, post_msg[500] = {0};
 	qwork *in_work = (qwork *)work;
 	struct list_head *pos, *q;
 	job_list *node = NULL;
@@ -120,13 +120,6 @@ void submit_work_func(struct work_struct *work) {
 			kfree((xpress *)in_work->task);
 		break;
 	case CHECKSUM:
-		checksum_result = (char *)kzalloc(sizeof(MD5_DIGEST_LENGTH) + 1,
-			GFP_KERNEL);
-		if (!checksum_result) {
-			rc = -ENOMEM;
-			goto free_checksum_data;
-		}
-		printk("No probsssss\n");
 		rc = do_checksum((checksum *)in_work->task, checksum_result);
 		if(rc)
 			sprintf(msg, "Checksum computation of %s Failed!\n",
@@ -134,16 +127,10 @@ void submit_work_func(struct work_struct *work) {
 		else
 			sprintf(msg, "Checksum for %s computed: %s.\n",
 				((checksum *)in_work->task)->infile, checksum_result);
-		printk("No probsssss2\n");
-		if(checksum_result != NULL)
-			kfree(checksum_result);
-free_checksum_data:
 		if(((checksum *)in_work->task)->infile)
 			kfree(((checksum *)in_work->task)->infile);
-		printk("No probsssss3\n");
 		if((checksum *)in_work->task != NULL)
 			kfree((checksum *)in_work->task);
-		printk("No probsssss4\n");
 		break;
 	case CONCAT:
 		rc = do_concat((concat *)in_work->task);
@@ -165,18 +152,15 @@ free_checksum_data:
 			kfree((concat *)in_work->task);
 		break;
 	default:
-		printk("Do something \n");
+		printk("Unrecognised Option!\n");
 	}
 
-	printk("No probsssss7\n");
 	if(in_work->priority)
 		atomic_dec(&priority_queue_size);
 	else
 		atomic_dec(&queue_size);
 
-	printk("No probsssss8\n");
 	spin_lock(&list_lock);
-	printk("No probsssss9\n");
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
 		if(node->id == in_work->id) {
@@ -187,16 +171,13 @@ free_checksum_data:
 			kfree(node);
 		}
 	}
-	printk("No probsssss10\n");
 	spin_unlock(&list_lock);
 
-	printk("No probsssss11\n");
 	sprintf(message.msg, "%s", post_msg);
 	message.err = rc;
 	if(wait == 1)
 		nl_send_msg(in_work->pid, &message);
 	pr_info("%s", post_msg);
-	printk("No probsssss12\n");
 
 	if(in_work && in_work->is_cancelling == 0)
 		kfree(work);
