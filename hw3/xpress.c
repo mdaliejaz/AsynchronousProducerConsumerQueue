@@ -7,7 +7,7 @@
 
 static DEFINE_MUTEX(compr_mutex);
 static DEFINE_MUTEX(dcompr_mutex);
-static DEFINE_MUTEX(flock_mutex);
+static DEFINE_MUTEX(xpress_flock_mutex);
 
 int validate_user_xpress_args(xpress *user_param)
 {
@@ -117,17 +117,9 @@ int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 	struct crypto_comp *cc = crypto_alloc_comp(compr_name, 0, 0);
 
 	if (IS_ERR(cc)) {
-		printk("crypto_alloc_comp failed! Check if the cipher "
+		printk("crypto_alloc_comp failed! Check if the compression "
 			"algorithm is correct.\n");
-		return PTR_ERR(cc);
-	}
-
-	// compression algorithm lzo, lz4 & deflate are only supported
-	if (strcmp(compr_name, "lzo") && strcmp(compr_name, "deflate")
-		&& strcmp(compr_name, "lz4")) {
-		rc = -EINVAL;
-		pr_err("unrecognized compression algorithm!\n");
-		goto out;
+		return -EINVAL;
 	}
 
 	mutex_lock(&compr_mutex);
@@ -163,21 +155,11 @@ int decompress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 	struct crypto_comp *cc = crypto_alloc_comp(dcompr_name, 0, 0);
 
 	if (IS_ERR(cc)) {
-		printk("crypto_alloc_comp failed! Check if the cipher "
+		printk("crypto_alloc_comp failed! Check if the decompression "
 			"algorithm is correct.\n");
-		return PTR_ERR(cc);
+		return -EINVAL;
 	}
 
-	// compression algorithm lzo, lz4 & deflate are only supported
-	if (strcmp(dcompr_name, "lzo") && strcmp(dcompr_name, "deflate")
-		&& strcmp(dcompr_name, "lz4")) {
-		rc = -EINVAL;
-		pr_err("unrecognized decompression algorithm!\n");
-		goto out;
-	}
-
-	printk("in_len = %d\n", in_len);
-	printk("out_len = %d\n", *out_len);
 	mutex_lock(&dcompr_mutex);
 	rc = crypto_comp_decompress(cc, in_buf, in_len, out_buf,
 		(unsigned int *)out_len);
@@ -198,7 +180,7 @@ int do_xpress(xpress *xpress_obj)
 	int rc = 0, out_exist = 0, file_size = 0, sleep_time = 500, obtained_lock = 0;
 	char *in_buffer, *out_buffer;
 	char infilp_lock_name[256], outfilp_lock_name[256];
-	char *tmpfilp_name = "xpressaa6b5d17e373744f14c07f71b22f9549.tmp";
+	char tmpfilp_name[256];
 	struct file *infilp, *outfilp, *tmpfilp, *infilp_lock = NULL, *outfilp_lock = NULL;
 	struct inode *del_inode;
 	size_t infile_size, outfile_size;
@@ -206,18 +188,19 @@ int do_xpress(xpress *xpress_obj)
 	umode_t infile_mode;
 	mm_segment_t oldfs;
 
+	sprintf(tmpfilp_name, "%s.tmp", xpress_obj->infile);
 	sprintf(infilp_lock_name, "%s.lock", xpress_obj->infile);
 	sprintf(outfilp_lock_name, "%s.lock", xpress_obj->outfile);
 
 	while(!obtained_lock) {
-		mutex_lock(&flock_mutex);
+		mutex_lock(&xpress_flock_mutex);
 		if(vfs_stat(infilp_lock_name, &stat) != 0) {
 			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
 			if(vfs_stat(outfilp_lock_name, &stat) != 0) {
 				outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
 				obtained_lock = 1;
 				printk("Obtained lock!\n");
-				mutex_unlock(&flock_mutex);
+				mutex_unlock(&xpress_flock_mutex);
 			} else {
 				if (infilp_lock && !IS_ERR(infilp_lock)) {
 					if(infilp_lock->f_path.dentry != NULL &&
@@ -227,7 +210,7 @@ int do_xpress(xpress *xpress_obj)
 					}
 					infilp_lock = NULL;
 				}
-				mutex_unlock(&flock_mutex);
+				mutex_unlock(&xpress_flock_mutex);
 				if(sleep_time > 10000) {
 					rc = -EBUSY;
 					pr_err("Couldn't get lock even after waiting for more "
@@ -240,7 +223,7 @@ int do_xpress(xpress *xpress_obj)
 				msleep(sleep_time);
 			}
 		} else {
-			mutex_unlock(&flock_mutex);
+			mutex_unlock(&xpress_flock_mutex);
 			if(sleep_time > 10000) {
 				rc = -EBUSY;
 				pr_err("Couldn't get lock even after waiting for more "
@@ -331,6 +314,8 @@ int do_xpress(xpress *xpress_obj)
 		infilp->f_op->read(infilp, in_buffer, infile_size, &infilp->f_pos);
 		rc = compress(in_buffer, out_buffer,
 					infile_size, &outfile_size, xpress_obj->algo);
+		if(rc)
+			goto reset_fs;
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
 		break;
@@ -338,6 +323,8 @@ int do_xpress(xpress *xpress_obj)
 		infilp->f_op->read(infilp, in_buffer, infile_size, &infilp->f_pos);
 		rc = decompress(in_buffer, out_buffer,
 					infile_size, &outfile_size, xpress_obj->algo);
+		if(rc)
+			goto reset_fs;
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
 		break;
