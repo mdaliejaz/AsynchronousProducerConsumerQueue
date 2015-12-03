@@ -6,7 +6,7 @@
 #include <linux/delay.h>
 #include "jobs.h"
 
-static DEFINE_MUTEX(flock_mutex);
+static DEFINE_MUTEX(concat_flock_mutex);
 
 int validate_user_concat_args(concat *user_param)
 {
@@ -118,23 +118,24 @@ int do_concat(concat *concat_obj)
 	int rc = 0, out_exist = 0, i, bytes, sleep_time = 500, obtained_lock = 0;
 	char infilp_lock_name[256], outfilp_lock_name[256];
 	char *buffer;
-	char *tmpfilp_name = "concataa6b5d17e373744f14c07f71b22f9549.tmp";
+	char tmpfilp_name[256];
 	struct file *infilp = NULL, *outfilp, *tmpfilp, *infilp_lock = NULL, *outfilp_lock = NULL;
 	mode_t mode;
 	struct kstat stat;
 	struct inode *del_inode;
 	mm_segment_t oldfs;
 
-	sprintf(outfilp_lock_name, "%s.lock", concat_obj->outfile);
+	sprintf(tmpfilp_name, "%s.tmp", concat_obj->outfile);
 
+	sprintf(outfilp_lock_name, "%s.lock", concat_obj->outfile);
 	while(!obtained_lock) {
-		mutex_lock(&flock_mutex);
+		mutex_lock(&concat_flock_mutex);
 		if(vfs_stat(outfilp_lock_name, &stat) != 0) {
 			outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
 			obtained_lock = 1;
-			mutex_unlock(&flock_mutex);
+			mutex_unlock(&concat_flock_mutex);
 		} else {
-			mutex_unlock(&flock_mutex);
+			mutex_unlock(&concat_flock_mutex);
 			if(sleep_time > 10000) {
 				rc = -EBUSY;
 				pr_err("Couldn't get lock even after waiting for more "
@@ -183,13 +184,13 @@ int do_concat(concat *concat_obj)
 		sleep_time = 500;
 		sprintf(infilp_lock_name, "%s.lock", concat_obj->infiles[i]);
 		while(!obtained_lock) {
-			mutex_lock(&flock_mutex);
+			mutex_lock(&concat_flock_mutex);
 			if(vfs_stat(infilp_lock_name, &stat) != 0) {
 				infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
 				obtained_lock = 1;
-				mutex_unlock(&flock_mutex);
+				mutex_unlock(&concat_flock_mutex);
 			} else {
-				mutex_unlock(&flock_mutex);
+				mutex_unlock(&concat_flock_mutex);
 				if(sleep_time > 10000) {
 					rc = -EBUSY;
 					pr_err("Couldn't get lock even after waiting for more "
