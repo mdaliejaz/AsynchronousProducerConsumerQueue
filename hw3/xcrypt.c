@@ -17,7 +17,7 @@ const u8 *aes_iv = (u8 *) CEPH_AES_IV;
 static DEFINE_MUTEX(md5_mutex);
 static DEFINE_MUTEX(encrypt_mutex);
 static DEFINE_MUTEX(decrypt_mutex);
-static DEFINE_MUTEX(flock_mutex);
+static DEFINE_MUTEX(xcrypt_flock_mutex);
 
 int validate_user_xcrypt_args(xcrypt *user_param)
 {
@@ -230,7 +230,7 @@ int do_encryption(const char *algo, const void *key, int key_len,
 	if (IS_ERR(tfm)) {
 		printk("crypto_alloc_blkcipher failed! Check if the cipher "
 			"algorithm is correct.\n");
-		return PTR_ERR(tfm);
+		return -EINVAL;
 	}
 
 	memset(pad, zero_padding, zero_padding);
@@ -280,7 +280,7 @@ int do_decryption(const char *algo, const void *key, int key_len,
 	if (IS_ERR(tfm)) {
 		printk("crypto_alloc_blkcipher failed! Check if the cipher "
 			"algorithm is correct.\n");
-		return PTR_ERR(tfm);
+		return -EINVAL;
 	}
 
 	crypto_blkcipher_setkey((void *)tfm, key, key_len);
@@ -323,7 +323,7 @@ int do_xcrypt(xcrypt *xcrypt_obj)
 	int decrypt_pad_len = 32, encrypt_pad_len = 32, obtained_lock = 0;
 	char *read_buffer, *key_buffer, *write_buffer, *pad_buffer, pad_size[3];
 	char cipher_algo[16], preamble_hash_key[48], *decrypt_key_buffer;
-	char *tmpfilp_name = "jcryptoaa6b5d17e373744f14c07f71b22f9549.tmp";
+	char tmpfilp_name[256];
 	char infilp_lock_name[256], outfilp_lock_name[256];
 	struct file *infilp, *outfilp, *tmpfilp, *infilp_lock = NULL, *outfilp_lock = NULL;
 	struct inode *outfilp_inode = NULL, *tmpfilp_inode = NULL;
@@ -341,18 +341,19 @@ int do_xcrypt(xcrypt *xcrypt_obj)
     sprintf(preamble_hash_key, "%s-%s", xcrypt_obj->keybuf,
     	xcrypt_obj->cipher);
 
+    sprintf(tmpfilp_name, "%s.tmp", xcrypt_obj->infile);
     sprintf(infilp_lock_name, "%s.lock", xcrypt_obj->infile);
     sprintf(outfilp_lock_name, "%s.lock", xcrypt_obj->outfile);
 
 	while(!obtained_lock) {
-		mutex_lock(&flock_mutex);
+		mutex_lock(&xcrypt_flock_mutex);
 		if(vfs_stat(infilp_lock_name, &stat) != 0) {
 			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
 			if(vfs_stat(outfilp_lock_name, &stat) != 0) {
 				outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
 				obtained_lock = 1;
 				printk("Obtained lock!\n");
-				mutex_unlock(&flock_mutex);
+				mutex_unlock(&xcrypt_flock_mutex);
 			} else {
 				if (infilp_lock && !IS_ERR(infilp_lock)) {
 					if(infilp_lock->f_path.dentry != NULL &&
@@ -362,7 +363,7 @@ int do_xcrypt(xcrypt *xcrypt_obj)
 					}
 					infilp_lock = NULL;
 				}
-				mutex_unlock(&flock_mutex);
+				mutex_unlock(&xcrypt_flock_mutex);
 				if(sleep_time > 10000) {
 					rc = -EBUSY;
 					pr_err("Couldn't get lock even after waiting for more "
@@ -375,7 +376,7 @@ int do_xcrypt(xcrypt *xcrypt_obj)
 				msleep(sleep_time);
 			}
 		} else {
-			mutex_unlock(&flock_mutex);
+			mutex_unlock(&xcrypt_flock_mutex);
 			if(sleep_time > 10000) {
 				rc = -EBUSY;
 				pr_err("Couldn't get lock even after waiting for more "
