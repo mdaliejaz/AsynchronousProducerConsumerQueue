@@ -17,7 +17,8 @@
 /*
  * This function prints the help for this driver program.
  */
-void print_help_on_stdout() {
+void print_help_on_stdout(void)
+{
 	fprintf(stdout, "POST_JOB(1)\t\t\tUser Commands\t\t\tPOST_JOB(1)\n\n");
 
 	fprintf(stdout, "NAME\n\tpost_job - posts jobs for asyncronous "
@@ -58,7 +59,7 @@ void print_help_on_stdout() {
 		"\t\tdefault priority is 'no priority' for all the jobs except "
 		"checksum computation whose priority is always high\n");
 	fprintf(stdout, "\t-h\tdisplay this help and exit\n\n");
-	
+
 	fprintf(stdout, "EXAMPLES\n\t./post_job -e -p password -a aes infile "
 		"outfile\n");
 	fprintf(stdout, "\t\tEncrypts the given input File 'infile' "
@@ -129,6 +130,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = ENCRYPT;
@@ -137,6 +139,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = DECRYPT;
@@ -145,6 +148,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = COMPRESS;
@@ -153,6 +157,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = DECOMPRESS;
@@ -161,6 +166,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = CHECKSUM;
@@ -169,6 +175,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = CONCAT;
@@ -177,6 +184,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = LIST_JOB;
@@ -185,6 +193,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = REMOVE_JOB;
@@ -193,6 +202,7 @@ int main(int argc, char *argv[])
 			if (t_found) {
 				fprintf(stderr, "Type of command can be specified only "
 						"once\n");
+				return -1;
 			}
 			t_found = 1;
 			type = SWAP_JOB_PRIORITY;
@@ -200,7 +210,8 @@ int main(int argc, char *argv[])
 		case 'a':
 			if (a_found) {
 				fprintf(stderr, "Algorithm to be used can be specified only "
-				        "once!\n");
+					"once!\n");
+				return -1;
 			}
 			a_found = 1;
 			algo = optarg;
@@ -208,6 +219,7 @@ int main(int argc, char *argv[])
 		case 'p':
 			if (p_found) {
 				fprintf(stderr, "Passphrase can be specified only once!\n");
+				return -1;
 			}
 			p_found = 1;
 
@@ -215,17 +227,18 @@ int main(int argc, char *argv[])
 			passlen = strlen(password);
 			if (passlen < 6) {
 				fprintf(stderr, "The password must be at least 6 characters "
-				        "long. The entered password is only %d characters.\n"
-				        "For details use -h flag.", passlen);
+					"long. The entered password is only %d characters.\n"
+					"For details use -h flag.", passlen);
 				return -1;
 			}
-			MD5((unsigned char*) password, passlen, pass_hash);
+			MD5((unsigned char *) password, passlen, pass_hash);
 			pass_hash[passlen] = '\0';
 			break;
 		case 'i':
 			if (i_found) {
 				fprintf(stderr, "You can remove/swap priority of "
 					"only one job at a time!\n");
+				return -1;
 			}
 			i_found = 1;
 			job_id = strtol(optarg, &junk, 10);
@@ -246,15 +259,14 @@ int main(int argc, char *argv[])
 		opt = getopt(argc, argv, "edsrcmluta:p:i:wPh");
 	}
 
-	// add type check validation
 	if (type == ENCRYPT || type == DECRYPT) {
-		if (p_found == 0){
+		if (p_found == 0) {
 			fprintf(stderr, "Password is a must for encryption/decryption.\n"
 							"Try './post_job -h' for more information.\n");
 			return -1;
 		}
 
-		if (a_found == 0){
+		if (a_found == 0) {
 			algo = "aes";
 		}
 
@@ -267,14 +279,13 @@ int main(int argc, char *argv[])
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
 			xcrypt_work.infile =  in_realpath + '\0';
-		}
-		else {
+		} else {
 			perror("realpath");
 			return -1;
 		}
 
 		res = realpath(argv[optind + 1], out_realpath);
-		// No error check as the output file might not exist
+		/* No error check as the output file might not exist */
 		xcrypt_work.outfile =  out_realpath + '\0';
 
 		xcrypt_work.cipher = algo + '\0';
@@ -285,22 +296,15 @@ int main(int argc, char *argv[])
 		job.type = type;
 		job.work = &xcrypt_work;
 
-		if(strlen(xcrypt_work.infile) > MAX_FILE_NAME_LENGTH ||
+		if (strlen(xcrypt_work.infile) > MAX_FILE_NAME_LENGTH ||
 			strlen(xcrypt_work.outfile) > MAX_FILE_NAME_LENGTH) {
 			fprintf(stderr, "The maximum size of filename allowed is 255 "
 				"characters One of your file name exceeds the allowed "
 				"limit.\n");
 			return -1;
 		}
-		// printf("0. Type = %d\n", job.type);
-		// printf("0. algo = %s\n", ((xcrypt *)job.work)->cipher);
-		// printf("0. keybuf = %s\n", ((xcrypt *)job.work)->keybuf);
-		// printf("0. infile = %s\n", ((xcrypt *)job.work)->infile);
-		// printf("0. outfile = %s\n", ((xcrypt *)job.work)->outfile);
-		// printf("0. keylen = %d\n", ((xcrypt *)job.work)->keylen);
-		// printf("0. flags = %d\n", ((xcrypt *)job.work)->flag);
 	} else if (type == COMPRESS || type == DECOMPRESS) {
-		if (a_found == 0){
+		if (a_found == 0) {
 			algo = "deflate";
 		}
 
@@ -313,14 +317,13 @@ int main(int argc, char *argv[])
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
 			xpress_work.infile =  in_realpath + '\0';
-		}
-		else {
+		} else {
 			perror("realpath");
 			return -1;
 		}
 
 		res = realpath(argv[optind + 1], out_realpath);
-		// No error check as the output file might not exist
+		/* No error check as the output file might not exist */
 		xpress_work.outfile =  out_realpath + '\0';
 
 		xpress_work.algo = algo + '\0';
@@ -329,20 +332,21 @@ int main(int argc, char *argv[])
 		job.type = type;
 		job.work = &xpress_work;
 
-		if(strlen(xpress_work.infile) > MAX_FILE_NAME_LENGTH ||
+		if (strlen(xpress_work.infile) > MAX_FILE_NAME_LENGTH ||
 			strlen(xpress_work.outfile) > MAX_FILE_NAME_LENGTH) {
 			fprintf(stderr, "The maximum size of filename allowed is 255 "
 				"characters One of your file name exceeds the allowed "
 				"limit.\n");
 			return -1;
 		}
-		// printf("0. Type = %d\n", job.type);
-		// printf("0. algo = %s\n", ((xpress *)job.work)->algo);
-		// printf("0. infile = %s\n", ((xpress *)job.work)->infile);
-		// printf("0. outfile = %s\n", ((xpress *)job.work)->outfile);
-		// printf("0. flags = %d\n", ((xpress *)job.work)->flag);
+		/* printf("0. Type = %d\n", job.type);
+		 * printf("0. algo = %s\n", ((xpress *)job.work)->algo);
+		 * printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+		 * printf("0. outfile = %s\n", ((xpress *)job.work)->outfile);
+		 * printf("0. flags = %d\n", ((xpress *)job.work)->flag);
+		 */
 	} else if (type == CHECKSUM) {
-		if (a_found == 0){
+		if (a_found == 0) {
 			algo = "md5";
 		}
 		if (optind + 1 != argc) {
@@ -354,8 +358,7 @@ int main(int argc, char *argv[])
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
 			checksum_work.infile =  in_realpath + '\0';
-		}
-		else {
+		} else {
 			perror("realpath");
 			return -1;
 		}
@@ -364,14 +367,15 @@ int main(int argc, char *argv[])
 		job.type = type;
 		job.work = &checksum_work;
 
-		if(strlen(checksum_work.infile) > MAX_FILE_NAME_LENGTH) {
+		if (strlen(checksum_work.infile) > MAX_FILE_NAME_LENGTH) {
 			fprintf(stderr, "The maximum size of filename allowed is 255 "
 				"characters One of your file name exceeds the allowed "
 				"limit.\n");
 			return -1;
 		}
-		// printf("0. Type = %d\n", job.type);
-		// printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+		/* printf("0. Type = %d\n", job.type);
+		 * printf("0. infile = %s\n", ((xpress *)job.work)->infile);
+		 */
 	} else if (type == CONCAT) {
 		if (!(optind + 2 <= argc)) {
 			fprintf(stderr, "%d = Insufficient number of arguments.\n",
@@ -381,21 +385,22 @@ int main(int argc, char *argv[])
 
 		concat_work.infile_count = argc - optind - 1;
 
-		concat_work.infiles = malloc(sizeof(char *) * concat_work.infile_count);
-		for(i = optind, j = 0; i < argc - 1; i++, j++) {
+		concat_work.infiles = malloc(
+			sizeof(char *) * concat_work.infile_count);
+		for (i = optind, j = 0; i < argc - 1; i++, j++) {
 			res = realpath(argv[i], in_realpath);
 			if (res) {
-				concat_work.infiles[j] = (char *)malloc(strlen(in_realpath) + 1);
+				concat_work.infiles[j] = (char *)malloc(
+					strlen(in_realpath) + 1);
 				strcpy(concat_work.infiles[j], in_realpath);
 				concat_work.infiles[j][strlen(in_realpath)] = '\0';
-			}
-			else {
+			} else {
 				perror("realpath of one of the input file");
 				return -1;
 			}
-			// printf("infile[%d] = %s\n", j, concat_work.infiles[j]);
+			/* printf("infile[%d] = %s\n", j, concat_work.infiles[j]); */
 
-			if(strlen(concat_work.infiles[j]) > MAX_FILE_NAME_LENGTH) {
+			if (strlen(concat_work.infiles[j]) > MAX_FILE_NAME_LENGTH) {
 				fprintf(stderr, "The maximum size of filename allowed is 255 "
 					"characters One of your file name exceeds the allowed "
 					"limit.\n");
@@ -408,34 +413,39 @@ int main(int argc, char *argv[])
 		job.type = type;
 		job.work = &concat_work;
 
-		// printf("0. Type = %d\n", job.type);
-		// printf("0. outfile = %s\n", ((concat *)job.work)->outfile);
-		// printf("0. infile count = %d\n", ((concat *)job.work)->infile_count);
-		// for(i = 0; i < concat_work.infile_count; i++) {
-		// 	printf("0. infile[%d] = %s\n", i, ((concat *)job.work)->infiles[i]);
-		// }
+		/* printf("0. Type = %d\n", job.type);
+		 * printf("0. outfile = %s\n", ((concat *)job.work)->outfile);
+		 * printf("0. infile count = %d\n", ((concat *)job.work)->infile_count);
+		 * for (i = 0; i < concat_work.infile_count; i++) {
+		 * 	printf("0. infile[%d] = %s\n", i, ((concat *)job.work)->infiles[i]);
+		 * }
+		 */
 	} else if (type == LIST_JOB) {
+		wait = 0;
 		job.type = type;
 		job_list = (char *)malloc(sizeof(int) * 100);
 		job.work = job_list;
 	} else if (type == REMOVE_JOB) {
 		if (!i_found) {
-			fprintf(stderr, "You must specify the Job ID of the process to be deleted.\n");
-			goto out;
+			fprintf(stderr, "You must specify the Job ID of the process "
+				"to be deleted.\n");
+			return -1;
 		}
+		wait = 0;
 		job.type = type;
 		job.work = &job_id;
-		// printf("removing ID = %d\n", job_id);
 	} else if (type == SWAP_JOB_PRIORITY) {
 		if (!i_found) {
-			fprintf(stderr, "You must specify the Job ID of the process to be deleted.\n");
-			goto out;
+			fprintf(stderr, "You must specify the Job ID of the process "
+				"whose priority needs to be swapped.\n");
+			return -1;
 		}
+		wait = 0;
 		job.type = type;
 		job.work = &job_id;
 	} else {
 		fprintf(stderr, "You must specify a valid job type!\n");
-		goto out;
+		return -1;
 	}
 
 	job.priority = priority;
@@ -443,18 +453,18 @@ int main(int argc, char *argv[])
 	job.pid = pid;
 	job.wait = wait;
 
-	if(wait)
+	if (wait)
 		rc = nl_bind(pid);
-	if(rc) {
+	if (rc) {
 		fprintf(stderr, "Netlink binding Failed!\n");
-		goto out;
+		return -1;
 	}
 
 	rc = syscall(__NR_submitjob, (void *) &job);
 	if (rc == 0) {
-		if(wait == 1) {
+		if (wait == 1) {
 			/* create a second thread which listens for kernel msg */
-			if(pthread_create(&rcv_msg_thread, NULL, receive_from_kernel,
+			if (pthread_create(&rcv_msg_thread, NULL, receive_from_kernel,
 				&pid)) {
 				fprintf(stderr, "Error creating thread for Kernel "
 					"response.\n");
@@ -469,62 +479,63 @@ int main(int argc, char *argv[])
 			fprintf(stdout, "Job PID: %d.\n"
 				"Once finished, proper message will be put in dmesg!\n", pid);
 		}
-	}
-	else {
+	} else {
 		fprintf(stderr, "syscall returned %d (errno=%d)\n", rc, errno);
 		perror("Syscall failed");
 		wait = 0;
 	}
 
-	if(type == CONCAT) {
-		for(i = 0; i < concat_work.infile_count; i++) {
-			if(!concat_work.infiles[i])
+	if (type == CONCAT) {
+		for (i = 0; i < concat_work.infile_count; i++) {
+			if (!concat_work.infiles[i])
 				free(concat_work.infiles[i]);
 		}
-		if(concat_work.infiles)
+		if (concat_work.infiles)
 			free(concat_work.infiles);
 	}
 
-	// Some other tasks can run here
-	// while the other thread waits for kernel msg!
-	// The following sleep for instance is to demonstrate such behaviour
-	if(!rc && wait) {
+	/* Some other tasks can run here
+	 * while the other thread waits for kernel msg!
+	 * The following sleep for instance is to demonstrate such behaviour
+	 */
+	if (!rc && wait) {
 		sleep(1);
 		fprintf(stdout, "Main Thread: (Test) Running task possible in main "
 			"thread while the spawned thread waits for kernel msg!\n");
 	}
 
-	if(!rc && type == LIST_JOB) {
+	if (type == LIST_JOB) {
 		fprintf(stdout, "List of Jobs in queue:\n%s", job_list);
 		free(job_list);
 	}
 
-	if(!rc && type == REMOVE_JOB) {
-		if(errno == 22)
+	if (type == REMOVE_JOB) {
+		if (errno == 22)
 			fprintf(stderr, "Could not find Job %d! "
-				"The Job might have already been scheduled.\n",job_id);
-		else if(rc)
+				"The Job might have already been scheduled.\n", job_id);
+		else if (rc)
 			fprintf(stderr, "Removal of Job %d Failed! "
-				"The Job might have already been scheduled.\n",job_id);
+				"The Job might have already been scheduled.\n", job_id);
 		else
 			fprintf(stdout, "Removal of Job %d was Successful!\n", job_id);
 	}
 
-	if(!rc && type == SWAP_JOB_PRIORITY) {
-		if(rc == -22)
+	if (type == SWAP_JOB_PRIORITY) {
+		if (rc == -22)
 			fprintf(stderr, "Could not find Job %d! "
-				"The Job might have already been scheduled.\n",job_id);
-		else if(rc)
+				"The Job might have already been scheduled.\n", job_id);
+		else if (rc)
 			fprintf(stderr, "Swapping Priority of Job %d Failed! "
 				"The Job might have already been scheduled.\n", job_id);
 		else
-			fprintf(stdout, "Swapping Priority of Job %d was Successful!\n", job_id);
+			fprintf(stdout, "Swapping Priority of Job %d was Successful!\n",
+				job_id);
 	}
 
-	if(!rc && wait) {
+	if (!rc && wait) {
 		fprintf(stdout, "Main thread execution over! "
 			"Going to join the threads back.\n");
-		if(pthread_join(rcv_msg_thread, NULL)) {
+		if (pthread_join(rcv_msg_thread, NULL)) {
 			fprintf(stderr, "Error joining thread\n");
 			return 2;
 		}

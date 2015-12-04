@@ -12,8 +12,8 @@
 DEFINE_SPINLOCK(list_lock);
 
 asmlinkage extern long (*sysptr)(void *arg);
-static struct workqueue_struct *work_queue = NULL;
-static struct workqueue_struct *priority_work_queue = NULL;
+static struct workqueue_struct *work_queue;
+static struct workqueue_struct *priority_work_queue;
 
 atomic_t queue_size;
 atomic_t priority_queue_size;
@@ -23,20 +23,13 @@ atomic_t unique_id;
 static LIST_HEAD(head);
 struct sock *nl_sk = NULL;
 
-long validate_user_args(submit_job *user_param) {
+long validate_user_args(submit_job *user_param)
+{
 	if (user_param == NULL || IS_ERR(user_param) ||
 		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
 		pr_err("User Parameters are Not Valid!\n");
 		return -EFAULT;
 	}
-
-	// if (user_param->type == LIST_JOB) {
-	// 	if (user_param->work == NULL || IS_ERR(user_param->work)) {
-	// 		pr_err("user parameters are not valid!\n");
-	// 		return -EINVAL;
-	// 	}
-	// 	goto out;
-	// }
 
 	if (user_param->work == NULL || IS_ERR(user_param->work) ||
 		unlikely(!access_ok(VERIFY_READ, user_param->work,
@@ -44,7 +37,6 @@ long validate_user_args(submit_job *user_param) {
 		pr_err("User Parameters are Not Valid!\n");
 		return -EINVAL;
 	}
-// out:
 	return 0;
 }
 
@@ -53,14 +45,14 @@ static void nl_send_msg(int pid, nl_msg *msg)
     struct nlmsghdr *header;
     struct sk_buff *skb_out;
     int msg_size;
-    int rc = 0;
+	int rc = 0;
 
-    msg_size = sizeof(nl_msg);
+	msg_size = sizeof(nl_msg);
 
-    skb_out = nlmsg_new(msg_size, 0);
-    if (!skb_out) {
-        printk(KERN_ERR "Failed to allocate new skb\n");
-        return;
+	skb_out = nlmsg_new(msg_size, 0);
+	if (!skb_out) {
+		printk(KERN_ERR "Failed to allocate new skb\n");
+		return;
     }
 
     header = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
@@ -69,10 +61,11 @@ static void nl_send_msg(int pid, nl_msg *msg)
 
     rc = nlmsg_unicast(nl_sk, skb_out, pid);
     if (rc < 0)
-        printk(KERN_INFO "Error while sending bak to user\n");
+		printk(KERN_INFO "Error while sending bak to user\n");
 }
 
-void submit_work_func(struct work_struct *work) {
+void submit_work_func(struct work_struct *work)
+{
 	int rc = 0, i, wait = 0, pid;
 	char checksum_result[40] = {0}, msg[100] = {0}, post_msg[500] = {0};
 	qwork *in_work = (qwork *)work;
@@ -80,82 +73,82 @@ void submit_work_func(struct work_struct *work) {
 	job_list *node = NULL;
 	nl_msg message;
 
-	switch(in_work->type) {
+	switch (in_work->type) {
 	case ENCRYPT:
 	case DECRYPT:
 		rc = do_xcrypt((xcrypt *)in_work->task);
-		if(rc)
+		if (rc)
 			sprintf(msg, "En/Decryption of %s Failed!\n",
 				((xcrypt *)in_work->task)->infile);
 		else
 			sprintf(msg, "En/Decryption of %s went successful!\n",
 				((xcrypt *)in_work->task)->infile);
-		if(((xcrypt *)in_work->task)->infile)
+		if (((xcrypt *)in_work->task)->infile)
 			kfree(((xcrypt *)in_work->task)->infile);
-		if(((xcrypt *)in_work->task)->outfile)
+		if (((xcrypt *)in_work->task)->outfile)
 			kfree(((xcrypt *)in_work->task)->outfile);
-		if(((xcrypt *)in_work->task)->keybuf)
+		if (((xcrypt *)in_work->task)->keybuf)
 			kfree(((xcrypt *)in_work->task)->keybuf);
-		if(((xcrypt *)in_work->task)->cipher)
+		if (((xcrypt *)in_work->task)->cipher)
 			kfree(((xcrypt *)in_work->task)->cipher);
-		if((xcrypt *)in_work->task)
+		if ((xcrypt *)in_work->task)
 			kfree((xcrypt *)in_work->task);
 		break;
 	case COMPRESS:
 	case DECOMPRESS:
 		rc = do_xpress((xpress *)in_work->task);
-		if(rc)
+		if (rc)
 			sprintf(msg, "De/Compression of %s Failed!\n",
 				((xpress *)in_work->task)->infile);
 		else
 			sprintf(msg, "De/Compression of %s went successful!\n",
 				((xpress *)in_work->task)->infile);
-		if(((xpress *)in_work->task)->infile)
+		if (((xpress *)in_work->task)->infile)
 			kfree(((xpress *)in_work->task)->infile);
-		if(((xpress *)in_work->task)->outfile)
+		if (((xpress *)in_work->task)->outfile)
 			kfree(((xpress *)in_work->task)->outfile);
-		if(((xpress *)in_work->task)->algo)
+		if (((xpress *)in_work->task)->algo)
 			kfree(((xpress *)in_work->task)->algo);
-		if((xpress *)in_work->task)
+		if ((xpress *)in_work->task)
 			kfree((xpress *)in_work->task);
 		break;
 	case CHECKSUM:
 		rc = do_checksum((checksum *)in_work->task, checksum_result);
-		if(rc)
+		if (rc)
 			sprintf(msg, "Checksum computation of %s Failed!\n",
 				((checksum *)in_work->task)->infile);
 		else
 			sprintf(msg, "Checksum for %s computed: %s.\n",
 				((checksum *)in_work->task)->infile, checksum_result);
-		if(((checksum *)in_work->task)->infile)
+		if (((checksum *)in_work->task)->infile)
 			kfree(((checksum *)in_work->task)->infile);
-		if((checksum *)in_work->task != NULL)
+		if ((checksum *)in_work->task != NULL)
 			kfree((checksum *)in_work->task);
 		break;
 	case CONCAT:
 		rc = do_concat((concat *)in_work->task);
-		if(rc)
+		if (rc)
 			sprintf(msg, "Concatenation of %d files Failed!\n",
 				((concat *)in_work->task)->infile_count);
 		else
 			sprintf(msg, "Concatenated %d files successfully!\n",
 				((concat *)in_work->task)->infile_count);
-		if(((concat *)in_work->task)->outfile != NULL)
+		if (((concat *)in_work->task)->outfile != NULL)
 			kfree(((concat *)in_work->task)->outfile);
-		for(i = 0; i < ((concat *)in_work->task)->infile_count; i++) {
-			if(((concat *)in_work->task)->infiles[i] != NULL)
+		for (i = 0; i < ((concat *)in_work->task)->infile_count; i++) {
+			if (((concat *)in_work->task)->infiles[i] != NULL)
 				kfree(((concat *)in_work->task)->infiles[i]);
 		}
-		if(((concat *)in_work->task)->infiles != NULL)
+		if (((concat *)in_work->task)->infiles != NULL)
 			kfree(((concat *)in_work->task)->infiles);
-		if((concat *)in_work->task != NULL)
+		if ((concat *)in_work->task != NULL)
 			kfree((concat *)in_work->task);
 		break;
 	default:
 		printk("Unrecognised Option!\n");
 	}
 
-	if(in_work->priority)
+	if (in_work->priority)
 		atomic_dec(&priority_queue_size);
 	else
 		atomic_dec(&queue_size);
@@ -163,10 +156,11 @@ void submit_work_func(struct work_struct *work) {
 	spin_lock(&list_lock);
 	list_for_each_safe(pos, q, &head) {
 		node = list_entry(pos, job_list, list);
-		if(node->id == in_work->id) {
+		if (node->id == in_work->id) {
 			pid = node->pid;
 			wait = node->wait;
-			sprintf(post_msg, "Job %d(PID = %d): %s", node->id, node->pid, msg);
+			sprintf(post_msg, "Job %d(PID = %d): %s", node->id, node->pid,
+				msg);
 			list_del(pos);
 			kfree(node);
 		}
@@ -175,11 +169,11 @@ void submit_work_func(struct work_struct *work) {
 
 	sprintf(message.msg, "%s", post_msg);
 	message.err = rc;
-	if(wait == 1)
+	if (wait == 1)
 		nl_send_msg(in_work->pid, &message);
 	pr_info("%s", post_msg);
 
-	if(in_work && in_work->is_cancelling == 0)
+	if (in_work && in_work->is_cancelling == 0)
 		kfree(work);
 	return;
 }
@@ -221,7 +215,8 @@ asmlinkage long submitjob(void *arg)
 		pr_err("Copying of Job PID Failed.\n");
 		goto free_job;
 	}
-	rc = copy_from_user(&job->priority, &((submit_job *)arg)->priority, sizeof(int));
+	rc = copy_from_user(&job->priority, &((submit_job *)arg)->priority,
+		sizeof(int));
 	if (rc) {
 		pr_err("Copying of Job Priority Failed.\n");
 		goto free_job;
@@ -233,13 +228,13 @@ asmlinkage long submitjob(void *arg)
 		goto free_job;
 	}
 
-	if(job->priority == 1) {
-		if(atomic_read(&priority_queue_size) == 20) {
+	if (job->priority == 1) {
+		if (atomic_read(&priority_queue_size) == 20) {
 			pr_info("Priority Workqueue is Full!\n");
 			goto free_job;
 		}
-	} else if(job->priority == 0) {
-		if(atomic_read(&queue_size) == 20) {
+	} else if (job->priority == 0) {
+		if (atomic_read(&queue_size) == 20) {
 			pr_info("Workqueue is Full!\n");
 			goto free_job;
 		}
@@ -248,7 +243,7 @@ asmlinkage long submitjob(void *arg)
 		goto free_job;
 	}
 
-	switch(job->type) {
+	switch (job->type) {
 	case ENCRYPT:
 	case DECRYPT:
 		rc = validate_user_xcrypt_args((xcrypt *)((submit_job *)arg)->work);
@@ -259,7 +254,7 @@ asmlinkage long submitjob(void *arg)
 		}
 		rc = copy_xcrypt_data_to_kernel((xcrypt *)((submit_job *)arg)->work,
 			xcrypt_work);
-		if(rc)
+		if (rc)
 			goto free_xcrypt;
 
 		job->work = xcrypt_work;
@@ -282,7 +277,7 @@ asmlinkage long submitjob(void *arg)
 		}
 		rc = copy_xpress_data_to_kernel((xpress *)((submit_job *)arg)->work,
 			xpress_work);
-		if(rc)
+		if (rc)
 			goto free_xpress;
 
 		job->work = xpress_work;
@@ -295,15 +290,17 @@ asmlinkage long submitjob(void *arg)
 		pr_debug("job->work->flag = %d\n", ((xpress *)job->work)->flag);
 		break;
 	case CHECKSUM:
-		rc = validate_user_checksum_args((checksum *)((submit_job *)arg)->work);
+		rc = validate_user_checksum_args((
+			checksum *)((submit_job *)arg)->work);
 		checksum_work = (checksum *)kzalloc(sizeof(checksum), GFP_KERNEL);
 		if (!checksum_work) {
 			rc = -ENOMEM;
 			goto free_job;
 		}
-		rc = copy_checksum_data_to_kernel((checksum *)((submit_job *)arg)->work,
+		rc = copy_checksum_data_to_kernel((
+			checksum *)((submit_job *)arg)->work,
 			checksum_work);
-		if(rc)
+		if (rc)
 			goto free_checksum;
 
 		job->work = checksum_work;
@@ -319,15 +316,16 @@ asmlinkage long submitjob(void *arg)
 			rc = -ENOMEM;
 			goto free_job;
 		}
-		// Uncomment if debugging
-		// for(i = 0; i < ((concat *)((submit_job *)arg)->work)->infile_count;
-		// 	i++) {
-		// 	pr_debug("job->infiles[i] = %s\n",
-		// 		(((concat *)((submit_job *)arg)->work)->infiles[i]));
-		// }
+		/* Uncomment if debugging
+		 * for(i = 0; i < ((concat *)((submit_job *)arg)->work)->infile_count;
+		 * 	i++) {
+		 * 	pr_debug("job->infiles[i] = %s\n",
+		 * 		(((concat *)((submit_job *)arg)->work)->infiles[i]));
+		 * }
+		 */
 		rc = copy_concat_data_to_kernel((concat *)((submit_job *)arg)->work,
 			concat_work);
-		if(rc)
+		if (rc)
 			goto free_concat;
 
 		job->work = concat_work;
@@ -335,7 +333,8 @@ asmlinkage long submitjob(void *arg)
 		pr_debug("job->type = %d\n", job->type);
 		pr_debug("job->pid = %d\n", job->pid);
 		pr_debug("job->outfile = %s\n", ((concat *)job->work)->outfile);
-		pr_debug("job->infile_count = %d\n", ((concat *)job->work)->infile_count);
+		pr_debug("job->infile_count = %d\n",
+			((concat *)job->work)->infile_count);
 		break;
 	case LIST_JOB:
 		strcat(return_job_list, "Job ID\tJob Type\tJob PID\tJob Priority\n");
@@ -364,12 +363,12 @@ asmlinkage long submitjob(void *arg)
 		spin_lock(&list_lock);
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
-			if(job_id == node->id) {
+			if (job_id == node->id) {
 				job_found = 1;
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
-				if(rc) {
-					if(node->priority)
+				if (rc) {
+					if (node->priority)
 						atomic_dec(&priority_queue_size);
 					else
 						atomic_dec(&queue_size);
@@ -377,65 +376,67 @@ asmlinkage long submitjob(void *arg)
 					sprintf(message.msg, "%s",
 						"This Job got deleted by some other process!\n");
 					message.err = -1;
-					if(node->wait == 1)
+					if (node->wait == 1)
 						nl_send_msg(node->pid, &message);
-					if(node != NULL)
+					if (node != NULL)
 						in_work = (qwork *)node->queued_job;
-					switch(in_work->type) {
+					switch (in_work->type) {
 					case ENCRYPT:
 					case DECRYPT:
-						if((xcrypt *)in_work->task != NULL) {
-							if(((xcrypt *)in_work->task)->infile != NULL)
+						if ((xcrypt *)in_work->task != NULL) {
+							if (((xcrypt *)in_work->task)->infile != NULL)
 								kfree(((xcrypt *)in_work->task)->infile);
-							if(((xcrypt *)in_work->task)->outfile != NULL)
+							if (((xcrypt *)in_work->task)->outfile != NULL)
 								kfree(((xcrypt *)in_work->task)->outfile);
-							if(((xcrypt *)in_work->task)->keybuf != NULL)
+							if (((xcrypt *)in_work->task)->keybuf != NULL)
 								kfree(((xcrypt *)in_work->task)->keybuf);
-							if(((xcrypt *)in_work->task)->cipher != NULL)
+							if (((xcrypt *)in_work->task)->cipher != NULL)
 								kfree(((xcrypt *)in_work->task)->cipher);
-							// Check again to avoid race condition
-							if((xcrypt *)in_work->task != NULL)
+							/* Check again to avoid race condition */
+							if ((xcrypt *)in_work->task != NULL)
 								kfree((xcrypt *)in_work->task);
 						}
 						break;
 					case COMPRESS:
 					case DECOMPRESS:
-						if((xpress *)in_work->task != NULL) {
-							if(((xpress *)in_work->task)->infile != NULL)
+						if ((xpress *)in_work->task != NULL) {
+							if (((xpress *)in_work->task)->infile != NULL)
 								kfree(((xpress *)in_work->task)->infile);
-							if(((xpress *)in_work->task)->outfile != NULL)
+							if (((xpress *)in_work->task)->outfile != NULL)
 								kfree(((xpress *)in_work->task)->outfile);
-							if(((xpress *)in_work->task)->algo != NULL)
+							if (((xpress *)in_work->task)->algo != NULL)
 								kfree(((xpress *)in_work->task)->algo);
-							// Check again to avoid race condition
-							if((xpress *)in_work->task != NULL)
+							/* Check again to avoid race condition */
+							if ((xpress *)in_work->task != NULL)
 								kfree((xpress *)in_work->task);
 						}
 						break;
 					case CHECKSUM:
-						if((checksum *)in_work->task != NULL) {
-							if(((checksum *)in_work->task)->infile != NULL)
+						if ((checksum *)in_work->task != NULL) {
+							if (((checksum *)in_work->task)->infile != NULL)
 								kfree(((checksum *)in_work->task)->infile);
-							if(((checksum *)in_work->task)->algo != NULL)
+							if (((checksum *)in_work->task)->algo != NULL)
 								kfree(((checksum *)in_work->task)->algo);
-							// Check again to avoid race condition
-							if((checksum *)in_work->task != NULL)
+							/* Check again to avoid race condition */
+							if ((checksum *)in_work->task != NULL)
 								kfree((checksum *)in_work->task);
 						}
 						break;
 					case CONCAT:
-						if((concat *)in_work->task) {
-							if(((concat *)in_work->task)->outfile != NULL)
+						if ((concat *)in_work->task) {
+							if (((concat *)in_work->task)->outfile != NULL)
 								kfree(((concat *)in_work->task)->outfile);
-							for(i = 0; i <
+							for (i = 0; i <
 								((concat *)in_work->task)->infile_count; i++) {
-								if((((concat *)in_work->task)->infiles[i]) != NULL)
-									kfree(((concat *)in_work->task)->infiles[i]);
+								if ((((concat *)
+									in_work->task)->infiles[i]) != NULL)
+									kfree(((
+										concat *)in_work->task)->infiles[i]);
 							}
-							if(((concat *)in_work->task)->infiles != NULL)
+							if (((concat *)in_work->task)->infiles != NULL)
 								kfree(((concat *)in_work->task)->infiles);
-							// Check again to avoid race condition
-							if((concat *)in_work->task != NULL)
+							/* Check again to avoid race condition */
+							if ((concat *)in_work->task != NULL)
 								kfree((concat *)in_work->task);
 						}
 						break;
@@ -443,7 +444,7 @@ asmlinkage long submitjob(void *arg)
 						pr_err("Unrecognised Option.\n");
 					}
 
-					if(node->queued_job != NULL)
+					if (node->queued_job != NULL)
 						kfree(node->queued_job);
 
 					list_del(pos);
@@ -457,7 +458,7 @@ asmlinkage long submitjob(void *arg)
 				}
 			}
 		}
-		if(!job_found) {
+		if (!job_found) {
 			pr_err("Failed to Delete Job %d. Could not find it in any queue. "
 						"The Job might have already been scheduled\n", job_id);
 			rc = -22;
@@ -475,18 +476,18 @@ asmlinkage long submitjob(void *arg)
 		spin_lock(&list_lock);
 		list_for_each_safe(pos, q, &head) {
 			node = list_entry(pos, job_list, list);
-			if(job_id == node->id) {
+			if (job_id == node->id) {
 				job_found = 1;
 				((qwork *)node->queued_job)->is_cancelling = 1;
 				rc = cancel_work_sync(node->queued_job);
-				if(rc) {
-					if(node->priority)
+				if (rc) {
+					if (node->priority)
 						atomic_dec(&priority_queue_size);
 					else
 						atomic_dec(&queue_size);
 					pr_info("Successfully Deleted Job %d.\n", job_id);
-					if(node != NULL) {
-						if(node->priority) {
+					if (node != NULL) {
+						if (node->priority) {
 							node->priority = 0;
 							((qwork *)node->queued_job)->priority = 0;
 							((qwork *)node->queued_job)->is_cancelling = 0;
@@ -494,7 +495,7 @@ asmlinkage long submitjob(void *arg)
 								(struct work_struct *)node->queued_job);
 							pr_info("Putting Job %d on high priority queue.\n",
 								node->pid);
-							if(rc) {
+							if (rc) {
 								atomic_inc(&queue_size);
 								rc = 0;
 							} else {
@@ -506,9 +507,9 @@ asmlinkage long submitjob(void *arg)
 							((qwork *)node->queued_job)->is_cancelling = 0;
 							rc = queue_work(priority_work_queue,
 								(struct work_struct *)node->queued_job);
-							pr_info("Putting Job %d on normal priority queue.\n",
-								node->pid);
-							if(rc) {
+							pr_info("Putting Job %d on normal priority "
+								"queue.\n", node->pid);
+							if (rc) {
 								atomic_inc(&priority_queue_size);
 								rc = 0;
 							} else {
@@ -524,7 +525,7 @@ asmlinkage long submitjob(void *arg)
 				}
 			}
 		}
-		if(!job_found)
+		if (!job_found)
 			rc = -22;
 		spin_unlock(&list_lock);
 		pr_debug("free job\n");
@@ -536,7 +537,7 @@ asmlinkage long submitjob(void *arg)
 	}
 
 	node = (job_list *)kzalloc(sizeof(job_list), GFP_KERNEL);
-	if(!node) {
+	if (!node) {
 		rc = -ENOMEM;
 		goto free_concat;
 	}
@@ -557,8 +558,9 @@ asmlinkage long submitjob(void *arg)
 		node->wait = job->wait;
 		node->priority = in_work->priority;
 		node->queued_job = (struct work_struct *)in_work;
-		if(job->priority) {
-			rc = queue_work(priority_work_queue, (struct work_struct *)in_work);
+		if (job->priority) {
+			rc = queue_work(priority_work_queue,
+				(struct work_struct *)in_work);
 			pr_info("Putting Job %d on high priority queue.\n", job->pid);
 			if (rc) {
 				atomic_inc(&priority_queue_size);
@@ -570,7 +572,7 @@ asmlinkage long submitjob(void *arg)
 		} else {
 			rc = queue_work(work_queue, (struct work_struct *)in_work);
 			pr_info("Putting Job %d on normal priority queue.\n", job->pid);
-			if(rc) {
+			if (rc) {
 				atomic_inc(&queue_size);
 				rc = 0;
 			} else {
@@ -590,25 +592,25 @@ asmlinkage long submitjob(void *arg)
 
 	goto out;
 free_in_work:
-	if(in_work != NULL)
+	if (in_work != NULL)
 		kfree(in_work);
 free_job_on_queue:
-	if(node != NULL)
+	if (node != NULL)
 		kfree(node);
 free_concat:
-	if(concat_work != NULL)
+	if (concat_work != NULL)
 		kfree(concat_work);
 free_checksum:
-	if(checksum_work != NULL)
+	if (checksum_work != NULL)
 		kfree(checksum_work);
 free_xpress:
-	if(xpress_work != NULL);
+	if (xpress_work != NULL)
 		kfree(xpress_work);
 free_xcrypt:
-	if(xcrypt_work != NULL)
+	if (xcrypt_work != NULL)
 		kfree(xcrypt_work);
 free_job:
-	if(job != NULL)
+	if (job != NULL)
 		kfree(job);
 out:
 	return rc;
@@ -617,12 +619,12 @@ out:
 static int __init init_sys_submitjob(void)
 {
 	struct netlink_kernel_cfg cfg = {
-    	.input = NULL,
+		.input = NULL,
 	};
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_USER, &cfg);
     if (!nl_sk) {
-        printk(KERN_ALERT "Error creating socket.\n");
-        return -ESOCKTNOSUPPORT;
+		printk(KERN_ALERT "Error creating socket.\n");
+		return -ESOCKTNOSUPPORT;
     }
 
 	if (sysptr == NULL)

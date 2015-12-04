@@ -11,39 +11,39 @@ static DEFINE_MUTEX(xpress_flock_mutex);
 
 int validate_user_xpress_args(xpress *user_param)
 {
-	if(user_param == NULL || IS_ERR(user_param) ||
+	if (user_param == NULL || IS_ERR(user_param) ||
 		unlikely(!access_ok(VERIFY_READ, user_param, sizeof(user_param)))) {
 		pr_err("user parameters are not valid!\n");
 		return -EFAULT;
 	}
 
-	if(user_param->infile == NULL || IS_ERR(user_param->infile) ||
+	if (user_param->infile == NULL || IS_ERR(user_param->infile) ||
 		unlikely(!access_ok(VERIFY_READ, user_param->infile,
 			sizeof(user_param->infile)))) {
 		pr_err("user parameters are not valid!\n");
 		return -EINVAL;
 	}
 
-	if(user_param->outfile == NULL || IS_ERR(user_param->outfile) ||
+	if (user_param->outfile == NULL || IS_ERR(user_param->outfile) ||
 		unlikely(!access_ok(VERIFY_WRITE, user_param->outfile,
 			sizeof(user_param->outfile)))) {
 		pr_err("user parameters are not valid!\n");
 		return -EINVAL;
 	}
 
-	if(user_param->algo == NULL || IS_ERR(user_param->algo) ||
+	if (user_param->algo == NULL || IS_ERR(user_param->algo) ||
 		unlikely(!access_ok(VERIFY_READ, user_param->algo,
 			sizeof(user_param->algo)))) {
 		pr_err("user parameters are not valid!\n");
 		return -EINVAL;
 	}
 
-	if(!(user_param->flag == COMPRESS || user_param->flag == DECOMPRESS)) {
+	if (!(user_param->flag == COMPRESS || user_param->flag == DECOMPRESS)) {
 		pr_err("user parameters are not valid!\n");
 		return -EINVAL;
 	}
 
-	if(!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH ||
+	if (!(strlen_user(user_param->infile) <= MAX_FILE_NAME_LENGTH ||
 		strlen_user(user_param->outfile) <= MAX_FILE_NAME_LENGTH)) {
 		return -ENAMETOOLONG;
 	}
@@ -111,7 +111,7 @@ out:
 }
 
 int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
-	char* compr_name) {
+	char *compr_name) {
 	int rc = 0;
 
 	struct crypto_comp *cc = crypto_alloc_comp(compr_name, 0, 0);
@@ -134,10 +134,10 @@ int compress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
 		goto out;
 	}
 
-	// /*
-	//  * If the data compressed only slightly, it is better to leave it
-	//  * uncompressed to improve read speed.
-	//  */
+	/*
+	 * If the data compressed only slightly, it is better to leave it
+	 * uncompressed to improve read speed.
+	 */
 	if (in_len - *out_len < 64) {
 		printk("same!\n");
 		memcpy(out_buf, in_buf, in_len);
@@ -150,7 +150,7 @@ out:
 }
 
 int decompress(void *in_buf, void *out_buf, size_t in_len, size_t *out_len,
-	char* dcompr_name) {
+	char *dcompr_name) {
 	int rc;
 	struct crypto_comp *cc = crypto_alloc_comp(dcompr_name, 0, 0);
 
@@ -192,18 +192,18 @@ int do_xpress(xpress *xpress_obj)
 	sprintf(infilp_lock_name, "%s.lock", xpress_obj->infile);
 	sprintf(outfilp_lock_name, "%s.lock", xpress_obj->outfile);
 
-	while(!obtained_lock) {
+	while (!obtained_lock) {
 		mutex_lock(&xpress_flock_mutex);
-		if(vfs_stat(infilp_lock_name, &stat) != 0) {
+		if (vfs_stat(infilp_lock_name, &stat) != 0) {
 			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
-			if(vfs_stat(outfilp_lock_name, &stat) != 0) {
+			if (vfs_stat(outfilp_lock_name, &stat) != 0) {
 				outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
 				obtained_lock = 1;
 				pr_debug("Obtained lock!\n");
 				mutex_unlock(&xpress_flock_mutex);
 			} else {
 				if (infilp_lock && !IS_ERR(infilp_lock)) {
-					if(infilp_lock->f_path.dentry != NULL &&
+					if (infilp_lock->f_path.dentry != NULL &&
 						infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
 						vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
 							infilp_lock->f_path.dentry, &del_inode);
@@ -211,7 +211,7 @@ int do_xpress(xpress *xpress_obj)
 					infilp_lock = NULL;
 				}
 				mutex_unlock(&xpress_flock_mutex);
-				if(sleep_time > 10000) {
+				if (sleep_time > 10000) {
 					rc = -EBUSY;
 					pr_err("Couldn't get lock even after waiting for more "
 						"than 30 seconds! Exiting.\n");
@@ -224,7 +224,7 @@ int do_xpress(xpress *xpress_obj)
 			}
 		} else {
 			mutex_unlock(&xpress_flock_mutex);
-			if(sleep_time > 10000) {
+			if (sleep_time > 10000) {
 				rc = -EBUSY;
 				pr_err("Couldn't get lock even after waiting for more "
 					"than 30 seconds! Exiting.\n");
@@ -237,10 +237,9 @@ int do_xpress(xpress *xpress_obj)
 		}
 	}
 
-	// open in/output files the files
 	infilp = filp_open(xpress_obj->infile, O_RDONLY, 0);
 	rc = validate_file(infilp, 1);
-	if(rc) {
+	if (rc) {
 		goto close_infilp;
 	}
     infilp->f_pos = 0;		/* start offset */
@@ -249,11 +248,11 @@ int do_xpress(xpress *xpress_obj)
 
 	tmpfilp = filp_open(tmpfilp_name, O_WRONLY|O_CREAT, infile_mode);
 	rc = validate_file(tmpfilp, 0);
-	if(rc) {
+	if (rc) {
 		goto close_tmpfilp;
 	}
     tmpfilp->f_pos = 0;		/* start offset */
-	if(infilp->f_path.dentry->d_inode->i_ino ==
+	if (infilp->f_path.dentry->d_inode->i_ino ==
 		tmpfilp->f_path.dentry->d_inode->i_ino) {
 		rc = -EPERM;
 		goto close_tmpfilp;
@@ -262,22 +261,21 @@ int do_xpress(xpress *xpress_obj)
 	out_exist = vfs_stat(xpress_obj->outfile, &stat);
     outfilp = filp_open(xpress_obj->outfile, O_WRONLY|O_CREAT, infile_mode);
 	rc = validate_file(outfilp, 0);
-	if(rc) {
+	if (rc) {
 		goto close_outfilp;
 	}
     outfilp->f_pos = 0;		/* start offset */
-	if(infilp->f_path.dentry->d_inode->i_ino ==
+	if (infilp->f_path.dentry->d_inode->i_ino ==
 		outfilp->f_path.dentry->d_inode->i_ino) {
 		rc = -EPERM;
 		goto close_outfilp;
 	}
-	if(tmpfilp->f_path.dentry->d_inode->i_ino ==
+	if (tmpfilp->f_path.dentry->d_inode->i_ino ==
 		outfilp->f_path.dentry->d_inode->i_ino) {
 		rc = -EPERM;
 		goto close_outfilp;
 	}
 
-	// create the buffers
 	in_buffer = (char *)kzalloc(infile_size, GFP_KERNEL);
 	if (!in_buffer) {
 		rc = -ENOMEM;
@@ -288,13 +286,13 @@ int do_xpress(xpress *xpress_obj)
 			infilp->f_path.dentry, "user.org_size",
 			&file_size, sizeof(int));
 
-	if(xpress_obj->flag == COMPRESS) {
+	if (xpress_obj->flag == COMPRESS) {
 		outfile_size = infile_size;
 	} else {
 		infilp->f_path.dentry->d_inode->i_op->getxattr(
 			infilp->f_path.dentry, "user.org_size",
 			&file_size, sizeof(int));
-		if(file_size == 0)
+		if (file_size == 0)
 			outfile_size = infile_size * 3;
 		else
 			outfile_size = file_size;
@@ -309,12 +307,12 @@ int do_xpress(xpress *xpress_obj)
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
 
-	switch(xpress_obj->flag) {
+	switch (xpress_obj->flag) {
 	case COMPRESS:
 		infilp->f_op->read(infilp, in_buffer, infile_size, &infilp->f_pos);
 		rc = compress(in_buffer, out_buffer,
 					infile_size, &outfile_size, xpress_obj->algo);
-		if(rc)
+		if (rc)
 			goto reset_fs;
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
@@ -323,7 +321,7 @@ int do_xpress(xpress *xpress_obj)
 		infilp->f_op->read(infilp, in_buffer, infile_size, &infilp->f_pos);
 		rc = decompress(in_buffer, out_buffer,
 					infile_size, &outfile_size, xpress_obj->algo);
-		if(rc)
+		if (rc)
 			goto reset_fs;
 		tmpfilp->f_op->write(tmpfilp, out_buffer, outfile_size,
 					&tmpfilp->f_pos);
@@ -333,7 +331,7 @@ int do_xpress(xpress *xpress_obj)
 		goto reset_fs;
 	}
 
-	if(xpress_obj->flag == COMPRESS) {
+	if (xpress_obj->flag == COMPRESS) {
 		tmpfilp->f_path.dentry->d_inode->i_op->setxattr(
 			tmpfilp->f_path.dentry, "user.org_size",
 			&infile_size, sizeof(int), 0);
@@ -349,7 +347,7 @@ reset_fs:
 free_in_buffer:
 	kfree(in_buffer);
 close_outfilp:
-	if(out_exist && rc < 0) {
+	if (out_exist && rc < 0) {
 		vfs_unlink(outfilp->f_path.dentry->d_parent->d_inode,
 			outfilp->f_path.dentry, &del_inode);
 		outfilp = NULL;
@@ -358,7 +356,7 @@ close_outfilp:
 		filp_close(outfilp, NULL);
 close_tmpfilp:
 	if (rc < 0 && tmpfilp != NULL && !IS_ERR(tmpfilp)) {
-		if(tmpfilp->f_path.dentry != NULL &&
+		if (tmpfilp->f_path.dentry != NULL &&
 			tmpfilp->f_path.dentry->d_parent->d_inode != NULL) {
 			vfs_unlink(tmpfilp->f_path.dentry->d_parent->d_inode,
 				tmpfilp->f_path.dentry, &del_inode);
@@ -372,7 +370,7 @@ close_infilp:
 		filp_close(infilp, NULL);
 out:
 	if (infilp_lock && !IS_ERR(infilp_lock)) {
-		if(infilp_lock->f_path.dentry != NULL &&
+		if (infilp_lock->f_path.dentry != NULL &&
 			infilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
 			vfs_unlink(infilp_lock->f_path.dentry->d_parent->d_inode,
 				infilp_lock->f_path.dentry, &del_inode);
@@ -380,7 +378,7 @@ out:
 		infilp_lock = NULL;
 	}
 	if (outfilp_lock && !IS_ERR(outfilp_lock)) {
-		if(outfilp_lock->f_path.dentry != NULL &&
+		if (outfilp_lock->f_path.dentry != NULL &&
 			outfilp_lock->f_path.dentry->d_parent->d_inode != NULL) {
 			vfs_unlink(outfilp_lock->f_path.dentry->d_parent->d_inode,
 				outfilp_lock->f_path.dentry, &del_inode);
