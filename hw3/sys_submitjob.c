@@ -197,6 +197,7 @@ asmlinkage long submitjob(void *arg)
 	qwork *in_work = NULL;
 	struct list_head *pos, *q;
 	job_list *node = NULL;
+	nl_msg message;
 
 	rc = validate_user_args((submit_job *) arg);
 	if (rc) {
@@ -374,6 +375,11 @@ asmlinkage long submitjob(void *arg)
 					else
 						atomic_dec(&queue_size);
 					pr_info("Successfully Deleted Job %d.\n", job_id);
+					sprintf(message.msg, "%s",
+						"This Job got deleted by some other process!\n");
+					message.err = -1;
+					if(node->wait == 1)
+						nl_send_msg(node->pid, &message);
 					if(node != NULL)
 						in_work = (qwork *)node->queued_job;
 					switch(in_work->type) {
