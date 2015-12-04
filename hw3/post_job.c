@@ -31,9 +31,9 @@ void print_help_on_stdout() {
 		"Decompression, Checksum computation, Concatenation of multiple "
 		"files, Listing of Jobs on queue, Removing a job from queue and "
 		"Swapping of Job priority is supported.\n\tThe user can choose "
-		"to wait for the job response or look at it later in dmesg.\n");
+		"to not wait for the job response and look at it later in dmesg.\n");
 	fprintf(stdout, "\tThe submitjob() system call is defined in the kernel "
-		"module\n\tsys_submitjob.c.\n");
+		"module sys_submitjob.c.\n");
 
 	fprintf(stdout, "\n\tThe Job options are as follows:\n");
 	fprintf(stdout, "\t-e\tencrypt the given file\n");
@@ -53,7 +53,7 @@ void print_help_on_stdout() {
 		"\t\tPassword should be at least 6 characters long\n");
 	fprintf(stdout, "\t-i\tID of the Job to be deleted or whose priority "
 		"needs to be changed.\n");
-	fprintf(stdout, "\t-w\twait for the job response\n");
+	fprintf(stdout, "\t-w\tdo not wait for the job response\n");
 	fprintf(stdout, "\t-P\tpriority to be used as high for the given job\n"
 		"\t\tdefault priority is 'no priority' for all the jobs except "
 		"checksum computation whose priority is always high\n");
@@ -109,7 +109,7 @@ void print_help_on_stdout() {
 
 int main(int argc, char *argv[])
 {
-	int rc = 0, pid, i, j, priority = 0, wait = 0;
+	int rc = 0, pid, i, j, priority = 0, wait = 1;
 	submit_job job;
 	char opt, *algo, *password, *res, *job_list, *junk;
 	char out_realpath[PATH_MAX + 1], in_realpath[PATH_MAX + 1];
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
 			job_id = strtol(optarg, &junk, 10);
 			break;
 		case 'w':
-			wait = 1;
+			wait = 0;
 			break;
 		case 'P':
 			priority = 1;
@@ -350,8 +350,6 @@ int main(int argc, char *argv[])
 				optind);
 			return -1;
 		}
-		wait = 1;
-		priority = 1;
 
 		res = realpath(argv[optind], in_realpath);
 		if (res) {
