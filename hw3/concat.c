@@ -133,6 +133,7 @@ int do_concat(concat *concat_obj)
 		if(vfs_stat(outfilp_lock_name, &stat) != 0) {
 			outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
 			obtained_lock = 1;
+			pr_debug("Obtained lock!\n");
 			mutex_unlock(&concat_flock_mutex);
 		} else {
 			mutex_unlock(&concat_flock_mutex);

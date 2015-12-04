@@ -199,7 +199,7 @@ int do_xpress(xpress *xpress_obj)
 			if(vfs_stat(outfilp_lock_name, &stat) != 0) {
 				outfilp_lock = filp_open(outfilp_lock_name, O_WRONLY|O_CREAT, 0444);
 				obtained_lock = 1;
-				printk("Obtained lock!\n");
+				pr_debug("Obtained lock!\n");
 				mutex_unlock(&xpress_flock_mutex);
 			} else {
 				if (infilp_lock && !IS_ERR(infilp_lock)) {

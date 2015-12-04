@@ -105,6 +105,7 @@ int do_checksum(checksum *checksum_obj, char *checksum_result) {
 		if(vfs_stat(infilp_lock_name, &stat) != 0) {
 			infilp_lock = filp_open(infilp_lock_name, O_WRONLY|O_CREAT, 0444);
 			obtained_lock = 1;
+			pr_debug("Obtained lock!\n");
 			mutex_unlock(&checksum_flock_mutex);
 		} else {
 			mutex_unlock(&checksum_flock_mutex);

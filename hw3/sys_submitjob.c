@@ -264,13 +264,13 @@ asmlinkage long submitjob(void *arg)
 
 		job->work = xcrypt_work;
 
-		// printk("job->type = %d\n", job->type);
-		// printk("job->work->infile = %s\n", ((xcrypt *)job->work)->infile);
-		// printk("job->work->outfile = %s\n", ((xcrypt *)job->work)->outfile);
-		// printk("job->work->cipher = %s\n", ((xcrypt *)job->work)->cipher);
-		// printk("job->work->keybuf = %s\n", ((xcrypt *)job->work)->keybuf);
-		// printk("job->work->keylen = %d\n", ((xcrypt *)job->work)->keylen);
-		// printk("job->work->flag = %d\n", ((xcrypt *)job->work)->flag);
+		pr_debug("job->type = %d\n", job->type);
+		pr_debug("job->work->infile = %s\n", ((xcrypt *)job->work)->infile);
+		pr_debug("job->work->outfile = %s\n", ((xcrypt *)job->work)->outfile);
+		pr_debug("job->work->cipher = %s\n", ((xcrypt *)job->work)->cipher);
+		pr_debug("job->work->keybuf = %s\n", ((xcrypt *)job->work)->keybuf);
+		pr_debug("job->work->keylen = %d\n", ((xcrypt *)job->work)->keylen);
+		pr_debug("job->work->flag = %d\n", ((xcrypt *)job->work)->flag);
 		break;
 	case COMPRESS:
 	case DECOMPRESS:
@@ -287,12 +287,12 @@ asmlinkage long submitjob(void *arg)
 
 		job->work = xpress_work;
 
-		// printk("job->type = %d\n", job->type);
-		// printk("job->pid = %d\n", job->pid);
-		// printk("job->work->infile = %s\n", ((xpress *)job->work)->infile);
-		// printk("job->work->outfile = %s\n", ((xpress *)job->work)->outfile);
-		// printk("job->work->algo = %s\n", ((xpress *)job->work)->algo);
-		// printk("job->work->flag = %d\n", ((xpress *)job->work)->flag);
+		pr_debug("job->type = %d\n", job->type);
+		pr_debug("job->pid = %d\n", job->pid);
+		pr_debug("job->work->infile = %s\n", ((xpress *)job->work)->infile);
+		pr_debug("job->work->outfile = %s\n", ((xpress *)job->work)->outfile);
+		pr_debug("job->work->algo = %s\n", ((xpress *)job->work)->algo);
+		pr_debug("job->work->flag = %d\n", ((xpress *)job->work)->flag);
 		break;
 	case CHECKSUM:
 		rc = validate_user_checksum_args((checksum *)((submit_job *)arg)->work);
@@ -308,9 +308,9 @@ asmlinkage long submitjob(void *arg)
 
 		job->work = checksum_work;
 
-		// printk("job->type = %d\n", job->type);
-		// printk("job->pid = %d\n", job->pid);
-		// printk("job->work = %s\n", ((checksum *)job->work)->infile);
+		pr_debug("job->type = %d\n", job->type);
+		pr_debug("job->pid = %d\n", job->pid);
+		pr_debug("job->work = %s\n", ((checksum *)job->work)->infile);
 		break;
 	case CONCAT:
 		rc = validate_user_concat_args((concat *)((submit_job *)arg)->work);
@@ -319,9 +319,10 @@ asmlinkage long submitjob(void *arg)
 			rc = -ENOMEM;
 			goto free_job;
 		}
+		// Uncomment if debugging
 		// for(i = 0; i < ((concat *)((submit_job *)arg)->work)->infile_count;
 		// 	i++) {
-		// 	printk("job->infiles[i] = %s\n",
+		// 	pr_debug("job->infiles[i] = %s\n",
 		// 		(((concat *)((submit_job *)arg)->work)->infiles[i]));
 		// }
 		rc = copy_concat_data_to_kernel((concat *)((submit_job *)arg)->work,
@@ -331,10 +332,10 @@ asmlinkage long submitjob(void *arg)
 
 		job->work = concat_work;
 
-		// printk("job->type = %d\n", job->type);
-		// printk("job->pid = %d\n", job->pid);
-		// printk("job->outfile = %s\n", ((concat *)job->work)->outfile);
-		// printk("job->infile_count = %d\n", ((concat *)job->work)->infile_count);
+		pr_debug("job->type = %d\n", job->type);
+		pr_debug("job->pid = %d\n", job->pid);
+		pr_debug("job->outfile = %s\n", ((concat *)job->work)->outfile);
+		pr_debug("job->infile_count = %d\n", ((concat *)job->work)->infile_count);
 		break;
 	case LIST_JOB:
 		strcat(return_job_list, "Job ID\tJob Type\tJob PID\tJob Priority\n");
@@ -354,8 +355,6 @@ asmlinkage long submitjob(void *arg)
 		goto free_job;
 		break;
 	case REMOVE_JOB:
-		// printk("(int *)((submit_job *)arg)->work = %d\n",
-		// 	*(int *)((submit_job *)arg)->work);
 		rc = copy_from_user(&job_id, (int *)((submit_job *)arg)->work,
 			sizeof(int));
 		if (rc) {
@@ -542,7 +541,7 @@ asmlinkage long submitjob(void *arg)
 		goto free_concat;
 	}
 
-	in_work =  (qwork *)kzalloc(sizeof(qwork), GFP_KERNEL);	// Need to free this somewhere. check
+	in_work =  (qwork *)kzalloc(sizeof(qwork), GFP_KERNEL);
 	if (in_work) {
 		INIT_WORK((struct work_struct *)in_work, submit_work_func);
 		atomic_inc(&unique_id);
@@ -632,7 +631,8 @@ static int __init init_sys_submitjob(void)
 		work_queue = alloc_workqueue("jobs_queue", 0, 5);
 	}
 	if (priority_work_queue == NULL) {
-		priority_work_queue = alloc_workqueue("priority_jobs_queue", WQ_HIGHPRI, 5);
+		priority_work_queue = alloc_workqueue("priority_jobs_queue",
+			WQ_HIGHPRI, 5);
 	}
 
 	atomic_set(&queue_size, 0);
