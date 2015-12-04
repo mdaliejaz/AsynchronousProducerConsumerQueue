@@ -457,7 +457,7 @@ int main(int argc, char *argv[])
 		rc = nl_bind(pid);
 	if (rc) {
 		fprintf(stderr, "Netlink binding Failed!\n");
-		return -1;
+		goto free_job_list;
 	}
 
 	rc = syscall(__NR_submitjob, (void *) &job);
@@ -506,7 +506,6 @@ int main(int argc, char *argv[])
 
 	if (type == LIST_JOB) {
 		fprintf(stdout, "List of Jobs in queue:\n%s", job_list);
-		free(job_list);
 	}
 
 	if (type == REMOVE_JOB) {
@@ -540,7 +539,9 @@ int main(int argc, char *argv[])
 			return 2;
 		}
 	}
-
-out:
+free_job_list:
+	if (type == LIST_JOB && job_list != NULL) {
+		free(job_list);
+	}
 	exit(rc);
 }
